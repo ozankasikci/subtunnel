@@ -72,7 +72,7 @@ enum Command {
         subdomain: Option<String>,
 
         /// Verify server TLS certificate (default: true). Set to false for self-signed certs.
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
         tls_verify: bool,
 
         /// Path to a custom CA certificate PEM file for server verification.
