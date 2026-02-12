@@ -1,12 +1,9 @@
 //! Server connection manager with TLS, yamux, auth, and auto-reconnect.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use rustls::{ClientConfig, DigitallySignedStruct, Error as TlsError, SignatureScheme};
+use rustls::pki_types::ServerName;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -15,6 +12,25 @@ use tracing::{debug, error, info, warn};
 use crate::protocol::codec::{read_message, write_message};
 use crate::protocol::ControlMessage;
 use crate::transport::mux::{MuxSession, YamuxStreamCompatExt};
+use crate::transport::tls::{client_config_from_options, ClientTlsOptions};
+
+/// TLS options for the client connection.
+#[derive(Debug, Clone)]
+pub struct ConnectTlsOptions {
+    /// Verify server certificate (default: true).
+    pub verify: bool,
+    /// Optional custom CA PEM file path.
+    pub ca_path: Option<String>,
+}
+
+impl Default for ConnectTlsOptions {
+    fn default() -> Self {
+        Self {
+            verify: true,
+            ca_path: None,
+        }
+    }
+}
 
 /// Result of a successful tunnel negotiation.
 pub struct TunnelInfo {
@@ -36,6 +52,18 @@ pub struct EstablishedConnection {
     pub _control_handle: tokio::task::JoinHandle<()>,
 }
 
+/// Extract the hostname from a "host:port" address string.
+fn extract_hostname(server_addr: &str) -> &str {
+    // Handle [ipv6]:port
+    if let Some(bracket_end) = server_addr.find(']') {
+        &server_addr[..=bracket_end]
+    } else if let Some(colon) = server_addr.rfind(':') {
+        &server_addr[..colon]
+    } else {
+        server_addr
+    }
+}
+
 /// Connect to the server, perform TLS + auth + tunnel handshake.
 ///
 /// Returns an `EstablishedConnection` on success.
@@ -43,6 +71,7 @@ pub async fn connect(
     server_addr: &str,
     token: &str,
     requested_subdomain: Option<&str>,
+    tls_opts: &ConnectTlsOptions,
 ) -> Result<EstablishedConnection> {
     // TCP connect
     let tcp = TcpStream::connect(server_addr)
@@ -50,11 +79,18 @@ pub async fn connect(
         .with_context(|| format!("failed to connect to {server_addr}"))?;
     debug!("TCP connected to {server_addr}");
 
-    // TLS handshake (skip verification for self-hosted servers)
-    let tls_config = make_tls_config();
-    let connector = TlsConnector::from(Arc::new(tls_config));
-    let server_name =
-        ServerName::try_from("subtunnel").map_err(|e| anyhow::anyhow!("invalid server name: {e}"))?;
+    // Determine hostname for SNI from the server address
+    let hostname = extract_hostname(server_addr).to_string();
+
+    // TLS handshake
+    let tls_config = client_config_from_options(&ClientTlsOptions {
+        verify: tls_opts.verify,
+        ca_path: tls_opts.ca_path.clone(),
+        hostname: hostname.clone(),
+    })?;
+    let connector = TlsConnector::from(tls_config);
+    let server_name = ServerName::try_from(hostname.clone())
+        .map_err(|e| anyhow::anyhow!("invalid server name '{hostname}': {e}"))?;
     let tls_stream = connector
         .connect(server_name, tcp)
         .await
@@ -137,9 +173,7 @@ pub async fn connect(
     );
 
     // Spawn a task to keep the control stream alive and handle heartbeats.
-    // We must keep the stream open — if it drops, the server sees EOF and tears down the tunnel.
     let control_handle = tokio::spawn(async move {
-        // The compat yamux stream doesn't support split well, so we alternate read/write.
         loop {
             match read_message(&mut control).await {
                 Ok(Some(ControlMessage::Heartbeat)) => {
@@ -171,13 +205,11 @@ pub async fn connect(
 }
 
 /// Connect with auto-reconnect and exponential backoff.
-///
-/// Calls `on_connected` each time a connection is established. The callback
-/// should run the proxy loop and return when the connection drops.
 pub async fn connect_with_retry<F, Fut>(
     server_addr: &str,
     token: &str,
     requested_subdomain: Option<&str>,
+    tls_opts: &ConnectTlsOptions,
     shutdown: tokio::sync::watch::Receiver<bool>,
     mut on_connected: F,
 ) -> Result<()>
@@ -193,7 +225,7 @@ where
             return Ok(());
         }
 
-        match connect(server_addr, token, requested_subdomain).await {
+        match connect(server_addr, token, requested_subdomain, tls_opts).await {
             Ok(conn) => {
                 backoff.reset();
                 if let Err(e) = on_connected(conn).await {
@@ -229,61 +261,6 @@ async fn shutdown_wait(mut rx: tokio::sync::watch::Receiver<bool>) {
     }
 }
 
-/// Build a TLS client config that accepts any server certificate.
-///
-/// This is appropriate for self-hosted tunnelr servers using self-signed certs.
-/// In production, you'd use proper CA verification.
-fn make_tls_config() -> ClientConfig {
-    let provider = rustls::crypto::ring::default_provider();
-    ClientConfig::builder_with_provider(Arc::new(provider))
-        .with_protocol_versions(&[&rustls::version::TLS13])
-        .expect("TLS 1.3 config")
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(NoVerifier))
-        .with_no_client_auth()
-}
-
-/// Certificate verifier that accepts any server certificate.
-#[derive(Debug)]
-struct NoVerifier;
-
-impl ServerCertVerifier for NoVerifier {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, TlsError> {
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, TlsError> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, TlsError> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        rustls::crypto::ring::default_provider()
-            .signature_verification_algorithms
-            .supported_schemes()
-    }
-}
-
 /// Exponential backoff with jitter for reconnection.
 struct ExponentialBackoff {
     current: Duration,
@@ -305,7 +282,6 @@ impl ExponentialBackoff {
     fn next_delay(&mut self) -> Duration {
         let delay = self.current;
         self.current = (self.current * 2).min(self.max);
-        // Add jitter: +/- 25%
         let jitter_range = delay.as_millis() as u64 / 4;
         if jitter_range > 0 {
             let jitter = rand::random::<u64>() % (jitter_range * 2);

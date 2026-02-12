@@ -44,6 +44,14 @@ enum Command {
         /// Authentication token that agents must provide.
         #[arg(long, env = "TUNNELR_TOKEN")]
         token: Option<String>,
+
+        /// Path to TLS certificate PEM file (e.g. Let's Encrypt fullchain.pem).
+        #[arg(long)]
+        tls_cert: Option<String>,
+
+        /// Path to TLS private key PEM file.
+        #[arg(long)]
+        tls_key: Option<String>,
     },
 
     /// Connect to a tunnelr server and expose a local port.
@@ -62,6 +70,14 @@ enum Command {
         /// Request a specific subdomain (e.g. "myapp" for myapp.tunnel.example.com).
         #[arg(long)]
         subdomain: Option<String>,
+
+        /// Verify server TLS certificate (default: true). Set to false for self-signed certs.
+        #[arg(long, default_value_t = true)]
+        tls_verify: bool,
+
+        /// Path to a custom CA certificate PEM file for server verification.
+        #[arg(long)]
+        tls_ca: Option<String>,
     },
 }
 
@@ -85,7 +101,7 @@ async fn main() -> Result<()> {
     });
 
     match cli.command {
-        Command::Server { port, http_port, host, domain, extra_domains, token } => {
+        Command::Server { port, http_port, host, domain, extra_domains, token, tls_cert, tls_key } => {
             eprintln!(
                 "\n  \x1b[1;32msubtunnel\x1b[0m v{}\n  \x1b[1mMode:\x1b[0m       server\n  \x1b[1mControl:\x1b[0m    {}:{}\n  \x1b[1mHTTP:\x1b[0m       {}:{}\n  \x1b[1mDomain:\x1b[0m     *.{}\n  \x1b[1mAuth:\x1b[0m       {}\n",
                 env!("CARGO_PKG_VERSION"),
@@ -102,6 +118,8 @@ async fn main() -> Result<()> {
                 host,
                 domain,
                 extra_domains,
+                tls_cert,
+                tls_key,
             };
             let server = Server::new(config);
             server.run().await?;
@@ -111,6 +129,8 @@ async fn main() -> Result<()> {
             to,
             token,
             subdomain,
+            tls_verify,
+            tls_ca,
         } => {
             eprintln!(
                 "\n  \x1b[1;32msubtunnel\x1b[0m v{}\n  \x1b[1mMode:\x1b[0m       client\n  \x1b[1mLocal:\x1b[0m      localhost:{}\n  \x1b[1mServer:\x1b[0m     {}\n  \x1b[1mConnecting...\x1b[0m\n",
@@ -119,7 +139,12 @@ async fn main() -> Result<()> {
                 to,
             );
 
-            let client = Client::new(to, token, local_port, subdomain);
+            use subtunnel::client::ConnectTlsOptions;
+            let tls_opts = ConnectTlsOptions {
+                verify: tls_verify,
+                ca_path: tls_ca,
+            };
+            let client = Client::new(to, token, local_port, subdomain, tls_opts);
             client.run(shutdown_rx).await?;
         }
     }

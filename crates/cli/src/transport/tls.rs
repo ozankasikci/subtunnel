@@ -5,17 +5,20 @@
 //! certificate via `rcgen`. Production deployments should use real
 //! certificates (e.g. via Let's Encrypt / ACME).
 
+use std::io::BufReader;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::ring as ring_provider;
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName, UnixTime};
+use rustls::{DigitallySignedStruct, Error as TlsError, SignatureScheme};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::{
     client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor,
     TlsConnector,
 };
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 /// A self-signed certificate and its private key in DER format.
 pub struct SelfSignedCert {
@@ -123,6 +126,131 @@ pub async fn tls_connect<IO: AsyncRead + AsyncWrite + Unpin>(
         .context("TLS connect failed")?;
     debug!("TLS handshake complete (client)");
     Ok(tls_stream)
+}
+
+/// Load a PEM certificate chain and private key from files on disk.
+pub fn load_certs_from_pem(
+    cert_path: &str,
+    key_path: &str,
+) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
+    let cert_file = std::fs::File::open(cert_path)
+        .with_context(|| format!("failed to open cert file: {cert_path}"))?;
+    let mut cert_reader = BufReader::new(cert_file);
+    let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cert_reader)
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("failed to parse PEM certificates")?;
+    if certs.is_empty() {
+        anyhow::bail!("no certificates found in {cert_path}");
+    }
+
+    let key_file = std::fs::File::open(key_path)
+        .with_context(|| format!("failed to open key file: {key_path}"))?;
+    let mut key_reader = BufReader::new(key_file);
+    let key = rustls_pemfile::private_key(&mut key_reader)
+        .context("failed to parse PEM private key")?
+        .with_context(|| format!("no private key found in {key_path}"))?;
+
+    info!(certs = certs.len(), "loaded TLS certificate chain from PEM files");
+    Ok((certs, key))
+}
+
+/// TLS client configuration options.
+pub struct ClientTlsOptions {
+    /// Whether to verify server certificates (default: true).
+    pub verify: bool,
+    /// Optional path to a custom CA PEM file.
+    pub ca_path: Option<String>,
+    /// Server hostname for SNI.
+    pub hostname: String,
+}
+
+/// Build a [`rustls::ClientConfig`] based on the provided options.
+///
+/// - If `verify` is true and `ca_path` is set, uses that CA file as the trust root.
+/// - If `verify` is true and `ca_path` is None, uses the webpki (Mozilla) root store.
+/// - If `verify` is false, uses `NoVerifier` (INSECURE — for self-signed dev certs only).
+pub fn client_config_from_options(opts: &ClientTlsOptions) -> Result<Arc<rustls::ClientConfig>> {
+    let provider = Arc::new(ring_provider::default_provider());
+
+    if !opts.verify {
+        debug!("TLS verification DISABLED — using NoVerifier (insecure)");
+        let config = rustls::ClientConfig::builder_with_provider(provider)
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .context("failed to set protocol versions")?
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoVerifier))
+            .with_no_client_auth();
+        return Ok(Arc::new(config));
+    }
+
+    let mut root_store = rustls::RootCertStore::empty();
+
+    if let Some(ca_path) = &opts.ca_path {
+        let ca_file = std::fs::File::open(ca_path)
+            .with_context(|| format!("failed to open CA file: {ca_path}"))?;
+        let mut reader = BufReader::new(ca_file);
+        let ca_certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut reader)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .context("failed to parse CA PEM file")?;
+        for cert in ca_certs {
+            root_store.add(cert).context("failed to add CA certificate")?;
+        }
+        debug!(ca = ca_path, "using custom CA for TLS verification");
+    } else {
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        debug!("using system/webpki root CAs for TLS verification");
+    }
+
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .context("failed to set protocol versions")?
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+    Ok(Arc::new(config))
+}
+
+/// Certificate verifier that accepts any server certificate (INSECURE).
+///
+/// Only for use with self-signed certs in development/self-hosted scenarios
+/// when the user explicitly opts in via `--tls-verify=false`.
+#[derive(Debug)]
+struct NoVerifier;
+
+impl ServerCertVerifier for NoVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, TlsError> {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, TlsError> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, TlsError> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        ring_provider::default_provider()
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
 }
 
 #[cfg(test)]

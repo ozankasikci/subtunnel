@@ -3,7 +3,7 @@
 pub mod connector;
 pub mod local_proxy;
 
-pub use connector::{connect, connect_with_retry, EstablishedConnection, TunnelInfo};
+pub use connector::{connect, connect_with_retry, ConnectTlsOptions, EstablishedConnection, TunnelInfo};
 pub use local_proxy::run_proxy;
 
 use anyhow::Result;
@@ -14,15 +14,23 @@ pub struct Client {
     token: String,
     local_port: u16,
     subdomain: Option<String>,
+    tls_opts: ConnectTlsOptions,
 }
 
 impl Client {
-    pub fn new(server_addr: String, token: String, local_port: u16, subdomain: Option<String>) -> Self {
+    pub fn new(
+        server_addr: String,
+        token: String,
+        local_port: u16,
+        subdomain: Option<String>,
+        tls_opts: ConnectTlsOptions,
+    ) -> Self {
         Self {
             server_addr,
             token,
             local_port,
             subdomain,
+            tls_opts,
         }
     }
 
@@ -33,6 +41,7 @@ impl Client {
             &self.server_addr,
             &self.token,
             self.subdomain.as_deref(),
+            &self.tls_opts,
             shutdown.clone(),
             |conn| {
                 let local_addr = local_addr.clone();

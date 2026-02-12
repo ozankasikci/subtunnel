@@ -24,6 +24,10 @@ pub struct ServerConfig {
     pub host: String,
     pub domain: String,
     pub extra_domains: Vec<String>,
+    /// Path to PEM certificate file (e.g. Let's Encrypt fullchain.pem).
+    pub tls_cert: Option<String>,
+    /// Path to PEM private key file.
+    pub tls_key: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -35,6 +39,8 @@ impl Default for ServerConfig {
             host: "localhost".into(),
             domain: "tunnel.localhost".into(),
             extra_domains: vec![],
+            tls_cert: None,
+            tls_key: None,
         }
     }
 }
@@ -59,10 +65,22 @@ impl Server {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let cert = tls::generate_self_signed_cert()
-            .context("failed to generate self-signed TLS certificate")?;
-        let tls_config = tls::server_config(vec![cert.cert_der], cert.key_der)
-            .context("failed to build TLS server config")?;
+        let tls_config = match (&self.config.tls_cert, &self.config.tls_key) {
+            (Some(cert_path), Some(key_path)) => {
+                let (certs, key) = tls::load_certs_from_pem(cert_path, key_path)
+                    .context("failed to load TLS certificate/key from PEM files")?;
+                info!("using TLS certificate from {cert_path}");
+                tls::server_config(certs, key)
+                    .context("failed to build TLS server config")?
+            }
+            _ => {
+                warn!("no --tls-cert/--tls-key provided; using self-signed certificate (development only)");
+                let cert = tls::generate_self_signed_cert()
+                    .context("failed to generate self-signed TLS certificate")?;
+                tls::server_config(vec![cert.cert_der], cert.key_der)
+                    .context("failed to build TLS server config")?
+            }
+        };
 
         // Spawn HTTP listener for public traffic
         let http_tunnel_mgr = self.tunnel_mgr.clone();

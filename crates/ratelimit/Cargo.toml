@@ -1,0 +1,13 @@
+[package]
+name = "subtunnel-ratelimit"
+version = "0.1.0"
+edition = "2021"
+description = "Rate limiting and abuse prevention for SubTunnel"
+
+[dependencies]
+tokio = { version = "1", features = ["time", "sync"] }
+dashmap = "6"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
