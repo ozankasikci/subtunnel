@@ -1,32 +1,6 @@
-[package]
-name = "subtunnel"
-version = "0.1.0"
-edition = "2021"
-description = "A self-hosted ngrok alternative written in Rust"
-
-[[bin]]
-name = "subtunnel"
-path = "src/main.rs"
-
-[dependencies]
-tokio = { version = "1", features = ["full"] }
-yamux = "0.13"
-rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
-tokio-rustls = "0.26"
-rcgen = "0.13"
-clap = { version = "4", features = ["derive", "env"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-anyhow = "1"
-thiserror = "2"
-uuid = { version = "1", features = ["v4"] }
-bytes = "1"
-tokio-util = { version = "0.7", features = ["codec", "compat"] }
-futures = "0.3"
-rand = "0.8"
-rustls-pki-types = "1"
-
-[dev-dependencies]
-tokio-test = "0.4"
+[workspace]
+resolver = "2"
+members = [
+    "crates/cli",
+    "crates/shared",
+]

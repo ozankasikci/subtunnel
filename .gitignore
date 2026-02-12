@@ -1,1 +1,17 @@
+# Rust
 /target
+crates/*/target
+
+# Node
+node_modules
+.next
+.turbo
+out
+
+# OS
+.DS_Store
+
+# Env
+.env
+.env.local
+.env*.local
