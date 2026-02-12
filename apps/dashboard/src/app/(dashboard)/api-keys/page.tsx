@@ -1,54 +1,75 @@
 "use client";
 
-import { useState } from "react";
-import { apiKeys as initialKeys } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
 import { formatDate, formatRelative } from "@/lib/utils";
-import { Key, Plus, Copy, Trash2, X, Eye, EyeOff } from "lucide-react";
+import { Key, Plus, Copy, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { api } from "@/lib/api";
+
+interface ApiKeyItem {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsed: string | null;
+}
 
 export default function ApiKeysPage() {
-  const [keys, setKeys] = useState(initialKeys);
+  const [keys, setKeys] = useState<ApiKeyItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
-  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const createKey = () => {
+  useEffect(() => {
+    api.apiKeys.list().then((data) => {
+      setKeys(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const createKey = async () => {
     if (!newKeyName.trim()) return;
-    const id = `key_${Date.now()}`;
-    setKeys((prev) => [
-      {
-        id,
-        name: newKeyName,
-        key: `st_live_${Math.random().toString(36).slice(2, 22)}`,
-        maskedKey: "st_live_xxxx...xxxx",
-        createdAt: new Date().toISOString(),
-        lastUsed: null,
-      },
-      ...prev,
-    ]);
-    setNewKeyName("");
-    setShowModal(false);
-    toast("API key created");
+    try {
+      const result = await api.apiKeys.create(newKeyName);
+      setKeys((prev) => [
+        { id: result.id, name: result.name, prefix: result.prefix, createdAt: result.createdAt, lastUsed: null },
+        ...prev,
+      ]);
+      setCreatedKey(result.rawKey);
+      setNewKeyName("");
+      toast("API key created");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to create key");
+    }
   };
 
-  const revokeKey = (id: string) => {
-    setKeys((prev) => prev.filter((k) => k.id !== id));
-    toast("API key revoked");
+  const revokeKey = async (id: string) => {
+    try {
+      await api.apiKeys.revoke(id);
+      setKeys((prev) => prev.filter((k) => k.id !== id));
+      toast("API key revoked");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to revoke key");
+    }
   };
 
   const copyKey = (key: string) => {
     navigator.clipboard?.writeText(key);
-    toast("Key copied to clipboard");
+    toast("Copied to clipboard");
   };
 
-  const toggleReveal = (id: string) => {
-    setRevealedKeys((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">API Keys</h1>
+          <p className="text-muted mt-1">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -58,7 +79,7 @@ export default function ApiKeysPage() {
           <p className="text-muted mt-1">Manage authentication tokens for the CLI and API</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => { setShowModal(true); setCreatedKey(null); }}
           className="inline-flex items-center gap-2 bg-accent hover:bg-accent-hover text-black font-medium rounded-lg px-4 py-2 text-sm transition-colors"
         >
           <Plus className="h-4 w-4" /> Create Key
@@ -88,23 +109,13 @@ export default function ApiKeysPage() {
                 {keys.map((k) => (
                   <tr key={k.id} className="border-b border-border last:border-0 hover:bg-card-hover transition-colors">
                     <td className="px-5 py-4 font-medium">{k.name}</td>
-                    <td className="px-5 py-4 font-mono text-muted">
-                      <span>{revealedKeys.has(k.id) ? k.key : k.maskedKey}</span>
-                    </td>
+                    <td className="px-5 py-4 font-mono text-muted">{k.prefix}</td>
                     <td className="px-5 py-4 text-muted">{formatDate(k.createdAt)}</td>
                     <td className="px-5 py-4 text-muted">{k.lastUsed ? formatRelative(k.lastUsed) : "Never"}</td>
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => toggleReveal(k.id)} className="p-1.5 rounded hover:bg-background text-muted hover:text-foreground transition-colors" title="Toggle visibility">
-                          {revealedKeys.has(k.id) ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                        <button onClick={() => copyKey(k.key)} className="p-1.5 rounded hover:bg-background text-muted hover:text-foreground transition-colors" title="Copy">
-                          <Copy className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => revokeKey(k.id)} className="p-1.5 rounded hover:bg-background text-muted hover:text-danger transition-colors" title="Revoke">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+                      <button onClick={() => revokeKey(k.id)} className="p-1.5 rounded hover:bg-background text-muted hover:text-danger transition-colors" title="Revoke">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -114,39 +125,60 @@ export default function ApiKeysPage() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Create Key Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowModal(false)} />
+          <div className="absolute inset-0 bg-black/60" onClick={() => { setShowModal(false); setCreatedKey(null); }} />
           <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Create API Key</h2>
-              <button onClick={() => setShowModal(false)} className="text-muted hover:text-foreground">
+              <h2 className="text-lg font-semibold">{createdKey ? "Key Created" : "Create API Key"}</h2>
+              <button onClick={() => { setShowModal(false); setCreatedKey(null); }} className="text-muted hover:text-foreground">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <label className="block text-sm text-muted mb-2">Key Name</label>
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && createKey()}
-              placeholder="e.g., CI/CD Pipeline"
-              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
-              autoFocus
-            />
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-muted hover:text-foreground transition-colors">
-                Cancel
-              </button>
-              <button
-                onClick={createKey}
-                disabled={!newKeyName.trim()}
-                className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-black font-medium rounded-lg transition-colors disabled:opacity-50"
-              >
-                Create
-              </button>
-            </div>
+
+            {createdKey ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted">Copy this key now — you won&apos;t be able to see it again.</p>
+                <div className="flex items-center gap-2 bg-background border border-border rounded-lg p-3">
+                  <code className="text-sm flex-1 break-all">{createdKey}</code>
+                  <button onClick={() => copyKey(createdKey)} className="shrink-0 p-1.5 rounded hover:bg-card text-muted hover:text-foreground">
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+                <button
+                  onClick={() => { setShowModal(false); setCreatedKey(null); }}
+                  className="w-full px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-black font-medium rounded-lg transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <label className="block text-sm text-muted mb-2">Key Name</label>
+                <input
+                  type="text"
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && createKey()}
+                  placeholder="e.g., CI/CD Pipeline"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-3 mt-6">
+                  <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-muted hover:text-foreground transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createKey}
+                    disabled={!newKeyName.trim()}
+                    className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-black font-medium rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Create
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

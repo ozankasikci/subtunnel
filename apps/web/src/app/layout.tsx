@@ -69,16 +69,16 @@ function Header() {
         </div>
         <div className="flex items-center gap-4">
           <Link
-            href="/docs"
+            href="/login"
             className="hidden sm:inline-flex text-sm text-muted hover:text-foreground transition-colors"
           >
-            Dashboard
+            Log in
           </Link>
           <Link
-            href="/docs"
+            href="/signup"
             className="inline-flex h-9 items-center rounded-lg bg-accent px-4 text-sm font-medium text-black hover:bg-accent/90 transition-colors"
           >
-            Get Started
+            Sign up
           </Link>
         </div>
       </div>

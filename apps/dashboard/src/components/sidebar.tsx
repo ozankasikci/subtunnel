@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   Globe,
@@ -28,6 +29,9 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { data: session } = useSession();
+  const user = session?.user;
+  const initials = (user?.name?.[0] || user?.email?.[0] || "?").toUpperCase();
 
   const nav = (
     <>
@@ -58,16 +62,24 @@ export function Sidebar() {
       </nav>
       <div className="border-t border-border p-4">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-sm font-bold">
-            O
-          </div>
+          {user?.image ? (
+            <img src={user.image} alt="" className="h-8 w-8 rounded-full" />
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-sm font-bold">
+              {initials}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">Ozan</p>
-            <p className="text-xs text-muted truncate">ozan@subtunnel.dev</p>
+            <p className="text-sm font-medium truncate">{user?.name || "User"}</p>
+            <p className="text-xs text-muted truncate">{user?.email}</p>
           </div>
-          <Link href="/login" className="text-muted hover:text-foreground transition-colors">
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="text-muted hover:text-foreground transition-colors"
+            title="Sign out"
+          >
             <LogOut className="h-4 w-4" />
-          </Link>
+          </button>
         </div>
       </div>
     </>

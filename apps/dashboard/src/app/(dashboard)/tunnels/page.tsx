@@ -1,8 +1,15 @@
-import { tunnels } from "@/lib/mock-data";
+import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { formatDate, formatRelative } from "@/lib/utils";
-import { Network, ExternalLink, Terminal } from "lucide-react";
+import { Network, ExternalLink } from "lucide-react";
 
-export default function TunnelsPage() {
+export default async function TunnelsPage() {
+  const user = await getCurrentUser();
+  const tunnels = await prisma.tunnel.findMany({
+    where: { userId: user!.id },
+    orderBy: { createdAt: "desc" },
+  });
+
   const isEmpty = tunnels.length === 0;
 
   return (
@@ -39,7 +46,6 @@ export default function TunnelsPage() {
                   <th className="px-5 py-3 font-medium">Subdomain</th>
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3 font-medium">Local Port</th>
-                  <th className="px-5 py-3 font-medium">Requests Today</th>
                   <th className="px-5 py-3 font-medium">Created</th>
                   <th className="px-5 py-3 font-medium">Last Active</th>
                   <th className="px-5 py-3 font-medium"></th>
@@ -68,9 +74,8 @@ export default function TunnelsPage() {
                       </span>
                     </td>
                     <td className="px-5 py-4 font-mono text-muted">{t.localPort}</td>
-                    <td className="px-5 py-4">{t.requestsToday.toLocaleString()}</td>
-                    <td className="px-5 py-4 text-muted">{formatDate(t.createdAt)}</td>
-                    <td className="px-5 py-4 text-muted">{formatRelative(t.lastActive)}</td>
+                    <td className="px-5 py-4 text-muted">{formatDate(t.createdAt.toISOString())}</td>
+                    <td className="px-5 py-4 text-muted">{formatRelative(t.lastActive.toISOString())}</td>
                     <td className="px-5 py-4">
                       {t.status === "online" && (
                         <a
