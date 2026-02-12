@@ -37,7 +37,7 @@ Internet Client → [Public Server :443] → (Tunnel) → [Local Agent] → [Loc
 - **Admin API**: REST API for management, metrics, auth
 
 #### 4. Agent/Client Components
-- **CLI interface**: `tunnelr local 8080 --to server.example.com`
+- **CLI interface**: `subtunnel local 8080 --to server.example.com`
 - **Connection manager**: Maintains persistent connection with auto-reconnect + exponential backoff
 - **Local proxy**: Forwards traffic to local service
 - **TUI dashboard**: Real-time connection stats (like ngrok's terminal UI)
@@ -74,7 +74,7 @@ Internet Client → [Public Server :443] → (Tunnel) → [Local Agent] → [Loc
 
 #### MVP (Phase 1)
 - [ ] TCP tunneling (agent → server → public port)
-- [ ] Single binary for both client and server (`tunnelr server`, `tunnelr local`)
+- [ ] Single binary for both client and server (`subtunnel server`, `subtunnel local`)
 - [ ] Token-based authentication
 - [ ] Yamux multiplexing
 - [ ] TLS encryption (rustls)
@@ -116,7 +116,7 @@ Internet Client → [Public Server :443] → (Tunnel) → [Local Agent] → [Loc
 ## Project Structure
 
 ```
-tunnelr/
+subtunnel/
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs              # CLI entry point (clap)

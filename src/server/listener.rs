@@ -1,22 +1,107 @@
-//! Public TCP listener — accepts internet connections and proxies them
-//! through yamux streams to the corresponding agent.
+//! HTTP listener — sniffs Host header from incoming connections and routes
+//! them to the correct tunnel via subdomain lookup.
 
-use anyhow::Result;
-use tokio::io::copy_bidirectional;
-use tokio::net::TcpStream;
-use tracing::{debug, info, warn};
+use anyhow::{Context, Result};
+use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tracing::{debug, error, info, warn};
 
-/// Accept public connections for a single tunnel and proxy each one through
-/// a new yamux stream opened to the agent.
-///
-/// `S` is the stream type returned by the opener — typically a
-/// `Compat<yamux::Stream>` that implements `tokio::io::AsyncRead + AsyncWrite`.
-///
-/// The `open_stream_fn` callback lets the caller inject how yamux streams are
-/// opened (keeping this module decoupled from the yamux session details).
+use super::tunnel_mgr::TunnelManager;
+
+/// Run the HTTP listener that routes connections by Host header subdomain.
+pub async fn run_http_listener(
+    http_port: u16,
+    domain: String,
+    extra_domains: Vec<String>,
+    tunnel_mgr: TunnelManager,
+) -> Result<()> {
+    let all_domains: Vec<String> = std::iter::once(domain.clone()).chain(extra_domains).collect();
+    let listener = TcpListener::bind(("0.0.0.0", http_port))
+        .await
+        .with_context(|| format!("failed to bind HTTP port {http_port}"))?;
+
+    info!(port = http_port, "HTTP listener started");
+
+    loop {
+        match listener.accept().await {
+            Ok((stream, addr)) => {
+                let domains = all_domains.clone();
+                let tunnel_mgr = tunnel_mgr.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handle_http_connection(stream, &domains, &tunnel_mgr).await {
+                        debug!(peer = %addr, error = %e, "HTTP connection error");
+                    }
+                });
+            }
+            Err(e) => {
+                error!(error = %e, "failed to accept HTTP connection");
+            }
+        }
+    }
+}
+
+/// Read enough of the TCP stream to extract the Host header,
+/// then route the full connection (including already-read bytes) to the tunnel.
+async fn handle_http_connection(
+    mut stream: TcpStream,
+    domains: &[String],
+    tunnel_mgr: &TunnelManager,
+) -> Result<()> {
+    let mut buf = vec![0u8; 8192];
+    let n = stream.read(&mut buf).await.context("failed to read from client")?;
+    if n == 0 {
+        anyhow::bail!("empty connection");
+    }
+    let initial = buf[..n].to_vec();
+
+    debug!("raw request first 200 bytes: {:?}", String::from_utf8_lossy(&initial[..initial.len().min(200)]));
+    // Log hex of first 50 bytes for debugging
+    let hex: String = initial[..initial.len().min(50)].iter().map(|b| format!("{:02x} ", b)).collect();
+    debug!("raw hex: {}", hex);
+
+    let subdomain = extract_subdomain(&initial, domains)
+        .context("failed to extract subdomain from Host header")?;
+
+    debug!(subdomain = %subdomain, "routing connection");
+
+    tunnel_mgr.route_with_preread(&subdomain, stream, initial).await
+}
+
+/// Extract subdomain from HTTP Host header, trying each domain.
+fn extract_subdomain(data: &[u8], domains: &[String]) -> Result<String> {
+    let text = std::str::from_utf8(data).context("non-utf8 HTTP request")?;
+
+    let host = text
+        .lines()
+        .find_map(|line| {
+            let lower = line.to_lowercase();
+            if lower.starts_with("host:") {
+                Some(line[5..].trim().to_string())
+            } else {
+                None
+            }
+        })
+        .context("no Host header found")?;
+
+    let host = host.split(':').next().unwrap_or(&host);
+
+    for domain in domains {
+        let suffix = format!(".{domain}");
+        if host.ends_with(&suffix) {
+            let subdomain = &host[..host.len() - suffix.len()];
+            if !subdomain.is_empty() {
+                return Ok(subdomain.to_string());
+            }
+        }
+    }
+
+    anyhow::bail!("host {host} does not match any configured domain: {domains:?}");
+}
+
+/// Accept connections from the tunnel manager and proxy them through yamux.
 pub async fn proxy_tunnel_connections<F, Fut, S>(
     tunnel_id: String,
-    mut conn_rx: tokio::sync::mpsc::Receiver<TcpStream>,
+    mut conn_rx: tokio::sync::mpsc::Receiver<(TcpStream, Vec<u8>)>,
     open_stream_fn: F,
 ) where
     F: Fn() -> Fut + Send + Sync + 'static,
@@ -25,7 +110,7 @@ pub async fn proxy_tunnel_connections<F, Fut, S>(
 {
     info!(tunnel_id = %tunnel_id, "tunnel proxy loop started");
 
-    while let Some(mut client_stream) = conn_rx.recv().await {
+    while let Some((mut client_stream, preread)) = conn_rx.recv().await {
         let peer_addr = client_stream
             .peer_addr()
             .map(|a| a.to_string())
@@ -37,38 +122,69 @@ pub async fn proxy_tunnel_connections<F, Fut, S>(
             Ok(mut yamux_stream) => {
                 let tid = tunnel_id.clone();
                 tokio::spawn(async move {
-                    debug!(tunnel_id = %tid, client = %peer_addr, "proxying started");
+                    if !preread.is_empty() {
+                        if let Err(e) = yamux_stream.write_all(&preread).await {
+                            debug!(tunnel_id = %tid, error = %e, "failed to write preread");
+                            return;
+                        }
+                    }
                     match copy_bidirectional(&mut client_stream, &mut yamux_stream).await {
-                        Ok((client_to_agent, agent_to_client)) => {
-                            debug!(
-                                tunnel_id = %tid,
-                                client = %peer_addr,
-                                client_to_agent,
-                                agent_to_client,
-                                "proxy session ended"
-                            );
+                        Ok((up, down)) => {
+                            debug!(tunnel_id = %tid, client = %peer_addr, up, down, "proxy ended");
                         }
                         Err(e) => {
-                            debug!(
-                                tunnel_id = %tid,
-                                client = %peer_addr,
-                                error = %e,
-                                "proxy session error"
-                            );
+                            debug!(tunnel_id = %tid, client = %peer_addr, error = %e, "proxy error");
                         }
                     }
                 });
             }
             Err(e) => {
-                warn!(
-                    tunnel_id = %tunnel_id,
-                    client = %peer_addr,
-                    error = %e,
-                    "failed to open yamux stream to agent, dropping connection"
-                );
+                warn!(tunnel_id = %tunnel_id, client = %peer_addr, error = %e, "failed to open yamux stream");
             }
         }
     }
 
-    info!(tunnel_id = %tunnel_id, "tunnel proxy loop exiting (channel closed)");
+    info!(tunnel_id = %tunnel_id, "tunnel proxy loop exiting");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn domains(d: &[&str]) -> Vec<String> {
+        d.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn extract_subdomain_basic() {
+        let req = b"GET / HTTP/1.1\r\nHost: abc123.tunnel.ezbackend.dev\r\n\r\n";
+        let sub = extract_subdomain(req, &domains(&["tunnel.ezbackend.dev"])).unwrap();
+        assert_eq!(sub, "abc123");
+    }
+
+    #[test]
+    fn extract_subdomain_with_port() {
+        let req = b"GET / HTTP/1.1\r\nHost: abc123.tunnel.ezbackend.dev:443\r\n\r\n";
+        let sub = extract_subdomain(req, &domains(&["tunnel.ezbackend.dev"])).unwrap();
+        assert_eq!(sub, "abc123");
+    }
+
+    #[test]
+    fn extract_subdomain_multiple_domains() {
+        let req = b"GET / HTTP/1.1\r\nHost: myapp.subtunnel.dev\r\n\r\n";
+        let sub = extract_subdomain(req, &domains(&["tunnel.ezbackend.dev", "subtunnel.dev"])).unwrap();
+        assert_eq!(sub, "myapp");
+    }
+
+    #[test]
+    fn extract_subdomain_wrong_domain() {
+        let req = b"GET / HTTP/1.1\r\nHost: abc123.other.com\r\n\r\n";
+        assert!(extract_subdomain(req, &domains(&["tunnel.ezbackend.dev"])).is_err());
+    }
+
+    #[test]
+    fn extract_subdomain_no_host() {
+        let req = b"GET / HTTP/1.1\r\n\r\n";
+        assert!(extract_subdomain(req, &domains(&["tunnel.ezbackend.dev"])).is_err());
+    }
 }

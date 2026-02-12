@@ -1,11 +1,11 @@
 [package]
-name = "tunnelr"
+name = "subtunnel"
 version = "0.1.0"
 edition = "2021"
 description = "A self-hosted ngrok alternative written in Rust"
 
 [[bin]]
-name = "tunnelr"
+name = "subtunnel"
 path = "src/main.rs"
 
 [dependencies]

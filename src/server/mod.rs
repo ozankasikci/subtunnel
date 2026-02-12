@@ -1,8 +1,4 @@
 //! Server-side components for tunnelr.
-//!
-//! The server listens for agent connections on a control port, authenticates
-//! them, and for each registered tunnel, accepts public TCP connections and
-//! proxies them through yamux streams to the agent.
 
 pub mod auth;
 pub mod handler;
@@ -11,38 +7,38 @@ pub mod tunnel_mgr;
 
 use anyhow::{Context, Result};
 use tokio::net::TcpListener;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use auth::Authenticator;
 use handler::handle_agent_connection;
+use listener::run_http_listener;
 use tunnel_mgr::TunnelManager;
 
-/// Configuration for the tunnelr server.
+use crate::transport::tls;
+
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
-    /// Port to listen on for agent control connections.
     pub control_port: u16,
-    /// Shared secret token that agents must present.
-    /// If `None`, authentication is disabled.
+    pub http_port: u16,
     pub auth_token: Option<String>,
-    /// Hostname that public tunnels are reachable on (for building public_addr).
     pub host: String,
+    pub domain: String,
+    pub extra_domains: Vec<String>,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             control_port: 7835,
+            http_port: 8080,
             auth_token: None,
             host: "localhost".into(),
+            domain: "tunnel.localhost".into(),
+            extra_domains: vec![],
         }
     }
 }
 
-/// The tunnelr server.
-///
-/// Listens for agent connections, authenticates them, manages tunnel
-/// registration, and proxies public traffic to agents via yamux.
 pub struct Server {
     config: ServerConfig,
     tunnel_mgr: TunnelManager,
@@ -50,7 +46,6 @@ pub struct Server {
 }
 
 impl Server {
-    /// Create a new server with the given configuration.
     pub fn new(config: ServerConfig) -> Self {
         let auth = match &config.auth_token {
             Some(token) => Authenticator::new(token.clone()),
@@ -63,18 +58,34 @@ impl Server {
         }
     }
 
-    /// Run the server, listening for agent connections on the control port.
-    ///
-    /// This function runs until the process is terminated.
     pub async fn run(&self) -> Result<()> {
+        let cert = tls::generate_self_signed_cert()
+            .context("failed to generate self-signed TLS certificate")?;
+        let tls_config = tls::server_config(vec![cert.cert_der], cert.key_der)
+            .context("failed to build TLS server config")?;
+
+        // Spawn HTTP listener for public traffic
+        let http_tunnel_mgr = self.tunnel_mgr.clone();
+        let http_port = self.config.http_port;
+        let domain = self.config.domain.clone();
+        let extra_domains = self.config.extra_domains.clone();
+        tokio::spawn(async move {
+            if let Err(e) = run_http_listener(http_port, domain, extra_domains, http_tunnel_mgr).await {
+                error!(error = %e, "HTTP listener failed");
+            }
+        });
+
+        // Control plane listener (TLS + yamux)
         let listener = TcpListener::bind(("0.0.0.0", self.config.control_port))
             .await
             .with_context(|| format!("failed to bind control port {}", self.config.control_port))?;
 
         info!(
-            port = self.config.control_port,
+            control_port = self.config.control_port,
+            http_port = self.config.http_port,
+            domain = %self.config.domain,
             host = %self.config.host,
-            "tunnelr server listening for agent connections"
+            "tunnelr server listening"
         );
 
         loop {
@@ -84,14 +95,19 @@ impl Server {
 
                     let tunnel_mgr = self.tunnel_mgr.clone();
                     let auth = self.auth.clone();
-                    let host = self.config.host.clone();
+                    let domain = self.config.domain.clone();
+                    let tls_cfg = tls_config.clone();
 
                     tokio::spawn(async move {
-                        // For MVP, accept raw TCP (no TLS). The handler is generic
-                        // over AsyncRead+AsyncWrite, so TLS can be layered in later
-                        // by wrapping `stream` with tokio_rustls::TlsAcceptor.
+                        let tls_stream = match tls::tls_accept(tls_cfg, stream).await {
+                            Ok(s) => s,
+                            Err(e) => {
+                                warn!(peer = %addr, error = %e, "TLS handshake failed");
+                                return;
+                            }
+                        };
                         if let Err(e) =
-                            handle_agent_connection(stream, tunnel_mgr, auth, host).await
+                            handle_agent_connection(tls_stream, tunnel_mgr, auth, domain).await
                         {
                             error!(peer = %addr, error = %e, "agent handler error");
                         }
@@ -104,7 +120,6 @@ impl Server {
         }
     }
 
-    /// Get a reference to the tunnel manager (for testing / introspection).
     pub fn tunnel_manager(&self) -> &TunnelManager {
         &self.tunnel_mgr
     }

@@ -3,14 +3,14 @@ use clap::{Parser, Subcommand};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use tunnelr::client::Client;
-use tunnelr::server::{Server, ServerConfig};
+use subtunnel::client::Client;
+use subtunnel::server::{Server, ServerConfig};
 
 #[derive(Parser)]
 #[command(
-    name = "tunnelr",
+    name = "subtunnel",
     version,
-    about = "Self-hosted tunnel to expose local services"
+    about = "Expose local services to the internet"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -21,13 +21,25 @@ struct Cli {
 enum Command {
     /// Run the tunnelr server (public-facing VPS).
     Server {
-        /// Port to listen on for agent connections.
+        /// Port to listen on for agent connections (control plane).
         #[arg(long, default_value_t = 7835)]
         port: u16,
 
-        /// Host to bind to / advertise in public addresses.
+        /// Port for HTTP listener (receives proxied traffic from nginx).
+        #[arg(long, default_value_t = 8080)]
+        http_port: u16,
+
+        /// Host to bind to / advertise.
         #[arg(long, default_value = "0.0.0.0")]
         host: String,
+
+        /// Domain for tunnel subdomains (e.g. tunnel.ezbackend.dev).
+        #[arg(long)]
+        domain: String,
+
+        /// Additional domains to accept (can be repeated).
+        #[arg(long = "extra-domain")]
+        extra_domains: Vec<String>,
 
         /// Authentication token that agents must provide.
         #[arg(long, env = "TUNNELR_TOKEN")]
@@ -47,15 +59,14 @@ enum Command {
         #[arg(long, env = "TUNNELR_TOKEN")]
         token: String,
 
-        /// Request a specific remote port on the server.
+        /// Request a specific subdomain (e.g. "myapp" for myapp.tunnel.example.com).
         #[arg(long)]
-        remote_port: Option<u16>,
+        subdomain: Option<String>,
     },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -64,7 +75,6 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    // Shutdown signal via Ctrl+C
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
@@ -75,19 +85,23 @@ async fn main() -> Result<()> {
     });
 
     match cli.command {
-        Command::Server { port, host, token } => {
+        Command::Server { port, http_port, host, domain, extra_domains, token } => {
             eprintln!(
-                "\n  \x1b[1;32mtunnelr\x1b[0m v{}\n  \x1b[1mMode:\x1b[0m       server\n  \x1b[1mListening:\x1b[0m  {}:{}\n  \x1b[1mAuth:\x1b[0m       {}\n",
+                "\n  \x1b[1;32msubtunnel\x1b[0m v{}\n  \x1b[1mMode:\x1b[0m       server\n  \x1b[1mControl:\x1b[0m    {}:{}\n  \x1b[1mHTTP:\x1b[0m       {}:{}\n  \x1b[1mDomain:\x1b[0m     *.{}\n  \x1b[1mAuth:\x1b[0m       {}\n",
                 env!("CARGO_PKG_VERSION"),
-                host,
-                port,
+                host, port,
+                host, http_port,
+                domain,
                 if token.is_some() { "token required" } else { "disabled" },
             );
 
             let config = ServerConfig {
                 control_port: port,
+                http_port,
                 auth_token: token,
                 host,
+                domain,
+                extra_domains,
             };
             let server = Server::new(config);
             server.run().await?;
@@ -96,16 +110,16 @@ async fn main() -> Result<()> {
             local_port,
             to,
             token,
-            remote_port,
+            subdomain,
         } => {
             eprintln!(
-                "\n  \x1b[1;32mtunnelr\x1b[0m v{}\n  \x1b[1mMode:\x1b[0m       client\n  \x1b[1mLocal:\x1b[0m      localhost:{}\n  \x1b[1mServer:\x1b[0m     {}\n  \x1b[1mConnecting...\x1b[0m\n",
+                "\n  \x1b[1;32msubtunnel\x1b[0m v{}\n  \x1b[1mMode:\x1b[0m       client\n  \x1b[1mLocal:\x1b[0m      localhost:{}\n  \x1b[1mServer:\x1b[0m     {}\n  \x1b[1mConnecting...\x1b[0m\n",
                 env!("CARGO_PKG_VERSION"),
                 local_port,
                 to,
             );
 
-            let client = Client::new(to, token, local_port, remote_port);
+            let client = Client::new(to, token, local_port, subdomain);
             client.run(shutdown_rx).await?;
         }
     }

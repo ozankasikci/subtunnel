@@ -20,10 +20,10 @@ use crate::transport::mux::{MuxSession, YamuxStreamCompatExt};
 pub struct TunnelInfo {
     /// Unique tunnel identifier assigned by the server.
     pub tunnel_id: String,
-    /// Public address that external clients connect to.
-    pub public_addr: String,
-    /// Assigned remote port on the server.
-    pub remote_port: u16,
+    /// Public URL for this tunnel.
+    pub public_url: String,
+    /// Assigned subdomain.
+    pub subdomain: String,
 }
 
 /// Established connection to the tunnelr server, ready for proxying.
@@ -32,6 +32,8 @@ pub struct EstablishedConnection {
     pub mux: MuxSession,
     /// Info about the negotiated tunnel.
     pub tunnel_info: TunnelInfo,
+    /// Handle to the control stream keepalive task. Dropping this aborts the task.
+    pub _control_handle: tokio::task::JoinHandle<()>,
 }
 
 /// Connect to the server, perform TLS + auth + tunnel handshake.
@@ -40,7 +42,7 @@ pub struct EstablishedConnection {
 pub async fn connect(
     server_addr: &str,
     token: &str,
-    remote_port: Option<u16>,
+    requested_subdomain: Option<&str>,
 ) -> Result<EstablishedConnection> {
     // TCP connect
     let tcp = TcpStream::connect(server_addr)
@@ -52,7 +54,7 @@ pub async fn connect(
     let tls_config = make_tls_config();
     let connector = TlsConnector::from(Arc::new(tls_config));
     let server_name =
-        ServerName::try_from("tunnelr").map_err(|e| anyhow::anyhow!("invalid server name: {e}"))?;
+        ServerName::try_from("subtunnel").map_err(|e| anyhow::anyhow!("invalid server name: {e}"))?;
     let tls_stream = connector
         .connect(server_name, tcp)
         .await
@@ -98,7 +100,7 @@ pub async fn connect(
     // Send TunnelReq
     let tunnel_req = ControlMessage::TunnelReq {
         protocol: "tcp".into(),
-        remote_port,
+        subdomain: requested_subdomain.map(|s| s.to_string()),
     };
     write_message(&mut control, &tunnel_req).await?;
     debug!("sent tunnel request");
@@ -111,17 +113,12 @@ pub async fn connect(
         ControlMessage::TunnelResp {
             success: true,
             tunnel_id,
-            remote_port: port,
-            ..
+            subdomain,
+            message,
         } => TunnelInfo {
             tunnel_id,
-            // Reconstruct public address from server_addr host + assigned port
-            public_addr: format!(
-                "{}:{}",
-                server_addr.split(':').next().unwrap_or(server_addr),
-                port
-            ),
-            remote_port: port,
+            public_url: message,
+            subdomain,
         },
         ControlMessage::TunnelResp {
             success: false,
@@ -135,11 +132,42 @@ pub async fn connect(
 
     info!(
         tunnel_id = %tunnel_info.tunnel_id,
-        public_addr = %tunnel_info.public_addr,
+        public_url = %tunnel_info.public_url,
         "tunnel established"
     );
 
-    Ok(EstablishedConnection { mux, tunnel_info })
+    // Spawn a task to keep the control stream alive and handle heartbeats.
+    // We must keep the stream open — if it drops, the server sees EOF and tears down the tunnel.
+    let control_handle = tokio::spawn(async move {
+        // The compat yamux stream doesn't support split well, so we alternate read/write.
+        loop {
+            match read_message(&mut control).await {
+                Ok(Some(ControlMessage::Heartbeat)) => {
+                    debug!("heartbeat received from server");
+                    if let Err(e) = write_message(&mut control, &ControlMessage::HeartbeatAck).await {
+                        warn!("failed to send heartbeat ack: {e}");
+                        break;
+                    }
+                }
+                Ok(Some(ControlMessage::HeartbeatAck)) => {
+                    debug!("heartbeat ack from server");
+                }
+                Ok(Some(other)) => {
+                    debug!("control message: {other:?}");
+                }
+                Ok(None) => {
+                    info!("control stream closed by server");
+                    break;
+                }
+                Err(e) => {
+                    warn!("control stream error: {e}");
+                    break;
+                }
+            }
+        }
+    });
+
+    Ok(EstablishedConnection { mux, tunnel_info, _control_handle: control_handle })
 }
 
 /// Connect with auto-reconnect and exponential backoff.
@@ -149,7 +177,7 @@ pub async fn connect(
 pub async fn connect_with_retry<F, Fut>(
     server_addr: &str,
     token: &str,
-    remote_port: Option<u16>,
+    requested_subdomain: Option<&str>,
     shutdown: tokio::sync::watch::Receiver<bool>,
     mut on_connected: F,
 ) -> Result<()>
@@ -165,7 +193,7 @@ where
             return Ok(());
         }
 
-        match connect(server_addr, token, remote_port).await {
+        match connect(server_addr, token, requested_subdomain).await {
             Ok(conn) => {
                 backoff.reset();
                 if let Err(e) = on_connected(conn).await {

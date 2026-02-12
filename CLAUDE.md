@@ -5,7 +5,7 @@ Tunnelr is a self-hosted ngrok alternative written in Rust. It creates secure tu
 
 ## Architecture
 Read DESIGN.md for full architecture. Key points:
-- Single binary: `tunnelr server` and `tunnelr local`
+- Single binary: `subtunnel server` and `subtunnel local`
 - Yamux for stream multiplexing over a single persistent connection
 - TLS 1.3 via rustls
 - Tokio async runtime

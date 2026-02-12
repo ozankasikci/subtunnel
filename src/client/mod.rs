@@ -9,41 +9,30 @@ pub use local_proxy::run_proxy;
 use anyhow::Result;
 use tracing::info;
 
-/// High-level client that manages the full tunnel lifecycle.
 pub struct Client {
     server_addr: String,
     token: String,
     local_port: u16,
-    remote_port: Option<u16>,
+    subdomain: Option<String>,
 }
 
 impl Client {
-    /// Create a new tunnelr client.
-    pub fn new(
-        server_addr: String,
-        token: String,
-        local_port: u16,
-        remote_port: Option<u16>,
-    ) -> Self {
+    pub fn new(server_addr: String, token: String, local_port: u16, subdomain: Option<String>) -> Self {
         Self {
             server_addr,
             token,
             local_port,
-            remote_port,
+            subdomain,
         }
     }
 
-    /// Run the client, connecting to the server and proxying traffic.
-    ///
-    /// This handles auto-reconnect with exponential backoff. Runs until
-    /// the shutdown signal is received.
     pub async fn run(self, shutdown: tokio::sync::watch::Receiver<bool>) -> Result<()> {
         let local_addr = format!("localhost:{}", self.local_port);
 
         connect_with_retry(
             &self.server_addr,
             &self.token,
-            self.remote_port,
+            self.subdomain.as_deref(),
             shutdown.clone(),
             |conn| {
                 let local_addr = local_addr.clone();
@@ -58,12 +47,11 @@ impl Client {
     }
 }
 
-/// Print the tunnel status banner.
 fn print_tunnel_status(info: &TunnelInfo, local_addr: &str) {
     info!(
-        "\n\x1b[1;32m  tunnelr\x1b[0m v{}\n  \x1b[1mStatus:\x1b[0m     connected\n  \x1b[1mForwarding:\x1b[0m tcp://{} -> {}\n  \x1b[1mTunnel ID:\x1b[0m  {}\n",
+        "\n\x1b[1;32m  tunnelr\x1b[0m v{}\n  \x1b[1mStatus:\x1b[0m     connected\n  \x1b[1mForwarding:\x1b[0m {} -> {}\n  \x1b[1mTunnel ID:\x1b[0m  {}\n",
         env!("CARGO_PKG_VERSION"),
-        info.public_addr,
+        info.public_url,
         local_addr,
         info.tunnel_id,
     );
