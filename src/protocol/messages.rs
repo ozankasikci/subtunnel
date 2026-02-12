@@ -1,6 +1,8 @@
 //! Control channel message types for the tunnelr protocol.
 //!
 //! All control messages are JSON-serialized and length-prefixed on the wire.
+//! The enum is tagged via `serde(tag = "type")` so each variant carries a
+//! `"type"` discriminator field in the JSON representation.
 
 use serde::{Deserialize, Serialize};
 
@@ -8,45 +10,46 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ControlMessage {
-    /// Client authenticates with the server.
-    Auth { token: String },
+    /// Client authenticates with the server using a bearer token.
+    Auth {
+        /// Opaque authentication token.
+        token: String,
+    },
 
-    /// Server responds to authentication.
+    /// Server responds to an authentication attempt.
     AuthResp {
+        /// Whether authentication succeeded.
         success: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        message: Option<String>,
+        /// Human-readable status or error description.
+        message: String,
     },
 
-    /// Client requests a new tunnel.
+    /// Client requests a new tunnel be created.
     TunnelReq {
-        /// Protocol to tunnel (tcp for MVP).
+        /// Protocol to tunnel (`"tcp"` for MVP).
         protocol: String,
-        /// Optional requested remote port (server picks one if omitted).
+        /// Optional requested remote port; the server picks one if omitted.
         #[serde(skip_serializing_if = "Option::is_none")]
         remote_port: Option<u16>,
     },
 
-    /// Server responds with the assigned tunnel info.
+    /// Server responds with assigned tunnel metadata.
     TunnelResp {
+        /// Whether tunnel creation succeeded.
         success: bool,
-        /// Unique tunnel identifier.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        tunnel_id: Option<String>,
-        /// The public address clients can connect to.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        public_addr: Option<String>,
-        /// Assigned remote port.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        remote_port: Option<u16>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        message: Option<String>,
+        /// Unique tunnel identifier (e.g. `"t_abc123"`).
+        tunnel_id: String,
+        /// The public port assigned to this tunnel.
+        remote_port: u16,
+        /// Human-readable status or error description.
+        message: String,
     },
 
-    /// Heartbeat ping (sent by either side).
+    /// Heartbeat ping — sent periodically by either side to keep the
+    /// connection alive and detect failures.
     Heartbeat,
 
-    /// Heartbeat acknowledgement.
+    /// Heartbeat acknowledgement — the peer replies with this.
     HeartbeatAck,
 }
 
@@ -65,13 +68,46 @@ mod tests {
     }
 
     #[test]
+    fn roundtrip_auth_resp() {
+        let msg = ControlMessage::AuthResp {
+            success: true,
+            message: "welcome".into(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: ControlMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn roundtrip_tunnel_req() {
+        let msg = ControlMessage::TunnelReq {
+            protocol: "tcp".into(),
+            remote_port: Some(9090),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: ControlMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn roundtrip_tunnel_req_no_port() {
+        let msg = ControlMessage::TunnelReq {
+            protocol: "tcp".into(),
+            remote_port: None,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(!json.contains("remote_port"));
+        let decoded: ControlMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
     fn roundtrip_tunnel_resp() {
         let msg = ControlMessage::TunnelResp {
             success: true,
-            tunnel_id: Some("t_abc123".into()),
-            public_addr: Some("server.example.com:12345".into()),
-            remote_port: Some(12345),
-            message: None,
+            tunnel_id: "t_abc123".into(),
+            remote_port: 12345,
+            message: "tunnel created".into(),
         };
         let json = serde_json::to_string(&msg).unwrap();
         let decoded: ControlMessage = serde_json::from_str(&json).unwrap();
@@ -85,5 +121,21 @@ mod tests {
         assert_eq!(json, r#"{"type":"heartbeat"}"#);
         let decoded: ControlMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn roundtrip_heartbeat_ack() {
+        let msg = ControlMessage::HeartbeatAck;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert_eq!(json, r#"{"type":"heartbeat_ack"}"#);
+        let decoded: ControlMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn json_tag_format() {
+        let msg = ControlMessage::Auth { token: "t".into() };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"auth""#));
     }
 }
