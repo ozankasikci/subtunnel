@@ -354,7 +354,7 @@ export default function HomePage() {
               </div>
               <div className="p-6 font-mono text-sm">
                 <span className="text-accent">$</span>{" "}
-                <span className="select-all">curl -sSL https://subtunnel.dev/install.sh | sh</span>
+                <span className="select-all">curl -sSL https://raw.githubusercontent.com/winterwindgames/subtunnel/main/apps/web/public/install.sh | sh</span>
               </div>
             </div>
           </div>
