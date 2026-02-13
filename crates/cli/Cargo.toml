@@ -12,7 +12,7 @@ path = "src/main.rs"
 tokio = { version = "1", features = ["full"] }
 yamux = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
-tokio-rustls = "0.26"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "logging", "tls12"] }
 rcgen = "0.13"
 clap = { version = "4", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }
