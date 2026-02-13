@@ -331,6 +331,72 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Install */}
+      <section id="install" className="py-24 md:py-32 border-t border-border/50">
+        <div className="mx-auto max-w-4xl px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+              Install in seconds
+            </h2>
+            <p className="mt-4 text-muted">
+              One command. No dependencies. Works on macOS and Linux.
+            </p>
+          </div>
+
+          {/* curl command */}
+          <div className="max-w-2xl mx-auto mb-12">
+            <div className="bg-surface border border-border rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-surface-2 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-3.5 h-3.5 text-muted" />
+                  <span className="text-xs text-muted font-mono">Install</span>
+                </div>
+              </div>
+              <div className="p-6 font-mono text-sm">
+                <span className="text-accent">$</span>{" "}
+                <span className="select-all">curl -sSL https://subtunnel.dev/install.sh | sh</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Platform cards */}
+          <div className="grid md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+            <div className="rounded-xl border border-border bg-surface/50 p-6 text-center">
+              <div className="text-2xl mb-3">🍎</div>
+              <h3 className="font-semibold mb-1">macOS</h3>
+              <p className="text-xs text-muted mb-3">Apple Silicon &amp; Intel</p>
+              <code className="text-xs text-accent bg-accent/10 px-2 py-1 rounded">curl -sSL … | sh</code>
+            </div>
+            <div className="rounded-xl border border-border bg-surface/50 p-6 text-center">
+              <div className="text-2xl mb-3">🐧</div>
+              <h3 className="font-semibold mb-1">Linux</h3>
+              <p className="text-xs text-muted mb-3">x86_64 &amp; ARM64</p>
+              <code className="text-xs text-accent bg-accent/10 px-2 py-1 rounded">curl -sSL … | sh</code>
+            </div>
+            <div className="rounded-xl border border-border bg-surface/50 p-6 text-center">
+              <div className="text-2xl mb-3">🪟</div>
+              <h3 className="font-semibold mb-1">Windows</h3>
+              <p className="text-xs text-muted mb-3">x86_64</p>
+              <a
+                href="https://github.com/winterwindgames/subtunnel/releases/latest"
+                className="text-xs text-accent hover:underline"
+              >
+                Download from GitHub →
+              </a>
+            </div>
+          </div>
+
+          <div className="text-center mt-8">
+            <a
+              href="https://github.com/winterwindgames/subtunnel/releases/latest"
+              className="text-sm text-muted hover:text-foreground transition-colors"
+            >
+              All releases on GitHub →
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* Bottom CTA */}
       <section className="py-24 md:py-32 border-t border-border/50">
         <div className="mx-auto max-w-4xl px-6 text-center">
