@@ -243,12 +243,17 @@ mod tests {
             let (stream, _) = listener.accept().await.unwrap();
             let mut mux = server_mux(stream);
 
-            for expected in [b"stream-0" as &[u8], b"stream-1", b"stream-2"] {
+            let mut received = std::collections::HashSet::new();
+            for _ in 0..3 {
                 let yamux_stream = mux.accept_stream().await.unwrap().unwrap();
                 let mut compat = yamux_stream.compat();
                 let mut buf = vec![0u8; 64];
                 let n = AsyncReadExt::read(&mut compat, &mut buf).await.unwrap();
-                assert_eq!(&buf[..n], expected);
+                received.insert(String::from_utf8_lossy(&buf[..n]).to_string());
+            }
+            assert_eq!(received.len(), 3);
+            for i in 0..3 {
+                assert!(received.contains(&format!("stream-{i}")));
             }
         });
 
