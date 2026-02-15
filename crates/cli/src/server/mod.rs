@@ -1,4 +1,4 @@
-//! Server-side components for tunnelr.
+//! Server-side components for subtunnel.
 
 pub mod auth;
 pub mod handler;
@@ -103,7 +103,7 @@ impl Server {
             http_port = self.config.http_port,
             domain = %self.config.domain,
             host = %self.config.host,
-            "tunnelr server listening"
+            "subtunnel server listening"
         );
 
         loop {

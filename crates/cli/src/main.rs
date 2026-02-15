@@ -19,7 +19,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run the tunnelr server (public-facing VPS).
+    /// Run the SubTunnel server (public-facing VPS).
     Server {
         /// Port to listen on for agent connections (control plane).
         #[arg(long, default_value_t = 7835)]
@@ -54,7 +54,7 @@ enum Command {
         tls_key: Option<String>,
     },
 
-    /// Connect to a tunnelr server and expose a local port.
+    /// Connect to a SubTunnel server and expose a local port.
     Local {
         /// Local port to expose (e.g. 8080).
         local_port: u16,

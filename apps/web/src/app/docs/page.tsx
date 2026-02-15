@@ -185,7 +185,7 @@ export default function DocsPage() {
             <CodeBlock>
               <code>
                 <span className="text-accent">$</span> openssl rand -hex 16{"\n"}
-                <span className="text-muted"># e.g. 1f881630ba330f5b4631070118b5d909</span>
+                <span className="text-muted"># e.g. a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6</span>
               </code>
             </CodeBlock>
 

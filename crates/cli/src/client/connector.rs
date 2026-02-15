@@ -42,7 +42,7 @@ pub struct TunnelInfo {
     pub subdomain: String,
 }
 
-/// Established connection to the tunnelr server, ready for proxying.
+/// Established connection to the subtunnel server, ready for proxying.
 pub struct EstablishedConnection {
     /// The yamux session for multiplexing data streams.
     pub mux: MuxSession,

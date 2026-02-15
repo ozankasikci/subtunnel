@@ -1,4 +1,4 @@
-//! TLS helpers for tunnelr — certificate generation, server/client config,
+//! TLS helpers for subtunnel — certificate generation, server/client config,
 //! and async accept/connect wrappers.
 //!
 //! For development, [`generate_self_signed_cert`] creates a self-signed
@@ -41,7 +41,7 @@ pub fn generate_self_signed_cert() -> Result<SelfSignedCert> {
             .context("failed to create certificate params")?;
     params
         .distinguished_name
-        .push(rcgen::DnType::CommonName, "tunnelr dev");
+        .push(rcgen::DnType::CommonName, "subtunnel.dev");
 
     let cert = params
         .self_signed(&key_pair)

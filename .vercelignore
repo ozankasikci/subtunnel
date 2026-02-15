@@ -1,0 +1,5 @@
+target/
+crates/
+.git/
+node_modules/
+apps/dashboard/

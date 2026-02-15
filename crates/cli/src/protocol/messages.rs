@@ -1,4 +1,4 @@
-//! Control channel message types for the tunnelr protocol.
+//! Control channel message types for the subtunnel protocol.
 
 use serde::{Deserialize, Serialize};
 

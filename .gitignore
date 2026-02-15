@@ -15,3 +15,8 @@ out
 .env
 .env.local
 .env*.local
+.vercel
+
+# Agent files
+CLAUDE.md
+DESIGN.md

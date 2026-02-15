@@ -1,4 +1,4 @@
-//! Tunnelr client — connects to a server and proxies traffic to a local service.
+//! SubTunnel client — connects to a server and proxies traffic to a local service.
 
 pub mod connector;
 pub mod local_proxy;
@@ -58,7 +58,7 @@ impl Client {
 
 fn print_tunnel_status(info: &TunnelInfo, local_addr: &str) {
     info!(
-        "\n\x1b[1;32m  tunnelr\x1b[0m v{}\n  \x1b[1mStatus:\x1b[0m     connected\n  \x1b[1mForwarding:\x1b[0m {} -> {}\n  \x1b[1mTunnel ID:\x1b[0m  {}\n",
+        "\n\x1b[1;32m  subtunnel\x1b[0m v{}\n  \x1b[1mStatus:\x1b[0m     connected\n  \x1b[1mForwarding:\x1b[0m {} -> {}\n  \x1b[1mTunnel ID:\x1b[0m  {}\n",
         env!("CARGO_PKG_VERSION"),
         info.public_url,
         local_addr,
