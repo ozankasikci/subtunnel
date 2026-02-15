@@ -244,7 +244,7 @@ export default function HomePage() {
                 </div>
                 <div>
                   <span className="text-accent">$</span>{" "}
-                  <span>curl -fsSL https://get.subtunnel.dev | sh</span>
+                  <span>curl -fsSL https://www.subtunnel.dev/install.sh | sh</span>
                 </div>
                 <div className="pt-2">
                   <span className="text-muted"># Expose your local server</span>
@@ -354,7 +354,7 @@ export default function HomePage() {
               </div>
               <div className="p-6 font-mono text-sm">
                 <span className="text-accent">$</span>{" "}
-                <span className="select-all">curl -sSL https://raw.githubusercontent.com/winterwindgames/subtunnel/main/apps/web/public/install.sh | sh</span>
+                <span className="select-all">curl -sSL https://www.subtunnel.dev/install.sh | sh</span>
               </div>
             </div>
           </div>

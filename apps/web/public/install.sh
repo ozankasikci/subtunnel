@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="winterwindgames/subtunnel"
+BASE_URL="https://www.subtunnel.dev/releases"
 INSTALL_DIR="/usr/local/bin"
 
 main() {
@@ -33,36 +33,38 @@ main() {
         *)               echo "Error: Unsupported platform: ${OS}-${ARCH}"; exit 1 ;;
     esac
 
-    # Get latest release tag
-    echo "Fetching latest release..."
-    RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"
-    
+    # Get latest version
+    echo "Fetching latest version..."
     if command -v curl >/dev/null 2>&1; then
-        RELEASE_JSON=$(curl -sL "$RELEASE_URL")
+        TAG=$(curl -sL "${BASE_URL}/latest.txt" | tr -d '[:space:]')
     elif command -v wget >/dev/null 2>&1; then
-        RELEASE_JSON=$(wget -qO- "$RELEASE_URL")
+        TAG=$(wget -qO- "${BASE_URL}/latest.txt" | tr -d '[:space:]')
     else
         echo "Error: curl or wget required"; exit 1
     fi
 
-    TAG=$(echo "$RELEASE_JSON" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"//;s/".*//')
     if [ -z "$TAG" ]; then
-        echo "Error: Could not determine latest release. Is the repo public or is there a release?"
+        echo "Error: Could not determine latest version."
         exit 1
     fi
 
     ARCHIVE="subtunnel-${TAG}-${TARGET}.tar.gz"
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ARCHIVE}"
+    DOWNLOAD_URL="${BASE_URL}/${TAG}/${ARCHIVE}"
 
     echo "Downloading SubTunnel ${TAG} for ${OS}/${ARCH}..."
-    
+
     TMPDIR=$(mktemp -d)
     trap 'rm -rf "$TMPDIR"' EXIT
 
     if command -v curl >/dev/null 2>&1; then
-        curl -sL "$DOWNLOAD_URL" -o "${TMPDIR}/${ARCHIVE}"
+        HTTP_CODE=$(curl -sL -w '%{http_code}' "$DOWNLOAD_URL" -o "${TMPDIR}/${ARCHIVE}")
+        if [ "$HTTP_CODE" != "200" ]; then
+            echo "Error: Download failed (HTTP ${HTTP_CODE})"
+            echo "URL: ${DOWNLOAD_URL}"
+            exit 1
+        fi
     else
-        wget -q "$DOWNLOAD_URL" -O "${TMPDIR}/${ARCHIVE}"
+        wget -q "$DOWNLOAD_URL" -O "${TMPDIR}/${ARCHIVE}" || { echo "Error: Download failed"; exit 1; }
     fi
 
     # Extract
