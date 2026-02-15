@@ -157,34 +157,34 @@ mod tests {
 
     #[test]
     fn extract_subdomain_basic() {
-        let req = b"GET / HTTP/1.1\r\nHost: abc123.tunnel.ezbackend.dev\r\n\r\n";
-        let sub = extract_subdomain(req, &domains(&["tunnel.ezbackend.dev"])).unwrap();
+        let req = b"GET / HTTP/1.1\r\nHost: abc123.tunnel.example.com\r\n\r\n";
+        let sub = extract_subdomain(req, &domains(&["tunnel.example.com"])).unwrap();
         assert_eq!(sub, "abc123");
     }
 
     #[test]
     fn extract_subdomain_with_port() {
-        let req = b"GET / HTTP/1.1\r\nHost: abc123.tunnel.ezbackend.dev:443\r\n\r\n";
-        let sub = extract_subdomain(req, &domains(&["tunnel.ezbackend.dev"])).unwrap();
+        let req = b"GET / HTTP/1.1\r\nHost: abc123.tunnel.example.com:443\r\n\r\n";
+        let sub = extract_subdomain(req, &domains(&["tunnel.example.com"])).unwrap();
         assert_eq!(sub, "abc123");
     }
 
     #[test]
     fn extract_subdomain_multiple_domains() {
         let req = b"GET / HTTP/1.1\r\nHost: myapp.subtunnel.dev\r\n\r\n";
-        let sub = extract_subdomain(req, &domains(&["tunnel.ezbackend.dev", "subtunnel.dev"])).unwrap();
+        let sub = extract_subdomain(req, &domains(&["tunnel.example.com", "subtunnel.dev"])).unwrap();
         assert_eq!(sub, "myapp");
     }
 
     #[test]
     fn extract_subdomain_wrong_domain() {
         let req = b"GET / HTTP/1.1\r\nHost: abc123.other.com\r\n\r\n";
-        assert!(extract_subdomain(req, &domains(&["tunnel.ezbackend.dev"])).is_err());
+        assert!(extract_subdomain(req, &domains(&["tunnel.example.com"])).is_err());
     }
 
     #[test]
     fn extract_subdomain_no_host() {
         let req = b"GET / HTTP/1.1\r\n\r\n";
-        assert!(extract_subdomain(req, &domains(&["tunnel.ezbackend.dev"])).is_err());
+        assert!(extract_subdomain(req, &domains(&["tunnel.example.com"])).is_err());
     }
 }

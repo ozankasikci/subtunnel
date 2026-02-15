@@ -33,7 +33,7 @@ enum Command {
         #[arg(long, default_value = "0.0.0.0")]
         host: String,
 
-        /// Domain for tunnel subdomains (e.g. tunnel.ezbackend.dev).
+        /// Domain for tunnel subdomains (e.g. tunnel.example.com).
         #[arg(long)]
         domain: String,
 

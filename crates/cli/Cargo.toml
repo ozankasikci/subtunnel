@@ -3,6 +3,12 @@ name = "subtunnel"
 version = "0.1.0"
 edition = "2021"
 description = "A self-hosted ngrok alternative written in Rust"
+license = "MIT"
+repository = "https://github.com/winterwindgames/subtunnel"
+homepage = "https://subtunnel.dev"
+readme = "../../README.md"
+keywords = ["tunnel", "ngrok", "reverse-proxy", "networking"]
+categories = ["network-programming", "command-line-utilities"]
 
 [[bin]]
 name = "subtunnel"
