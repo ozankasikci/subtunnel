@@ -1,6 +1,10 @@
 {
   "name": "subtunnel",
   "private": true,
+  "packageManager": "pnpm@10.29.3",
+  "dependencies": {
+    "next": "16.1.6"
+  },
   "scripts": {
     "dev:web": "pnpm --filter @subtunnel/web dev",
     "dev:dashboard": "pnpm --filter @subtunnel/dashboard dev",
