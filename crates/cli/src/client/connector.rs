@@ -48,9 +48,16 @@ pub struct EstablishedConnection {
     pub mux: MuxSession,
     /// Info about the negotiated tunnel.
     pub tunnel_info: TunnelInfo,
+    /// Receiver that becomes `false` when the control channel detects a dead connection.
+    pub alive: tokio::sync::watch::Receiver<bool>,
     /// Handle to the control stream keepalive task. Dropping this aborts the task.
     pub _control_handle: tokio::task::JoinHandle<()>,
 }
+
+/// How often the client sends heartbeats to the server.
+const CLIENT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
+/// If no message is received from the server within this duration, consider the connection dead.
+const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// Extract the hostname from a "host:port" address string.
 fn extract_hostname(server_addr: &str) -> &str {
@@ -172,36 +179,68 @@ pub async fn connect(
         "tunnel established"
     );
 
-    // Spawn a task to keep the control stream alive and handle heartbeats.
+    // Spawn a task that sends heartbeats and detects dead connections.
+    let (alive_tx, alive_rx) = tokio::sync::watch::channel(true);
     let control_handle = tokio::spawn(async move {
+        let (ctrl_read, mut ctrl_write) = tokio::io::split(control);
+        let ctrl_read = std::sync::Arc::new(tokio::sync::Mutex::new(ctrl_read));
+        let mut last_received = tokio::time::Instant::now();
+        let mut heartbeat_interval = tokio::time::interval(CLIENT_HEARTBEAT_INTERVAL);
+        heartbeat_interval.tick().await; // consume the immediate first tick
+
         loop {
-            match read_message(&mut control).await {
-                Ok(Some(ControlMessage::Heartbeat)) => {
-                    debug!("heartbeat received from server");
-                    if let Err(e) = write_message(&mut control, &ControlMessage::HeartbeatAck).await {
-                        warn!("failed to send heartbeat ack: {e}");
+            tokio::select! {
+                _ = heartbeat_interval.tick() => {
+                    // Check if we've timed out waiting for any server message
+                    if last_received.elapsed() > HEARTBEAT_TIMEOUT {
+                        warn!("no heartbeat from server in {:?}, connection presumed dead", HEARTBEAT_TIMEOUT);
                         break;
                     }
+                    // Send our own heartbeat
+                    if let Err(e) = write_message(&mut ctrl_write, &ControlMessage::Heartbeat).await {
+                        warn!("failed to send heartbeat: {e}");
+                        break;
+                    }
+                    debug!("client heartbeat sent");
                 }
-                Ok(Some(ControlMessage::HeartbeatAck)) => {
-                    debug!("heartbeat ack from server");
-                }
-                Ok(Some(other)) => {
-                    debug!("control message: {other:?}");
-                }
-                Ok(None) => {
-                    info!("control stream closed by server");
-                    break;
-                }
-                Err(e) => {
-                    warn!("control stream error: {e}");
-                    break;
+                msg = async {
+                    let mut reader = ctrl_read.lock().await;
+                    read_message(&mut *reader).await
+                } => {
+                    match msg {
+                        Ok(Some(ControlMessage::Heartbeat)) => {
+                            debug!("heartbeat received from server");
+                            last_received = tokio::time::Instant::now();
+                            if let Err(e) = write_message(&mut ctrl_write, &ControlMessage::HeartbeatAck).await {
+                                warn!("failed to send heartbeat ack: {e}");
+                                break;
+                            }
+                        }
+                        Ok(Some(ControlMessage::HeartbeatAck)) => {
+                            debug!("heartbeat ack from server");
+                            last_received = tokio::time::Instant::now();
+                        }
+                        Ok(Some(other)) => {
+                            debug!("control message: {other:?}");
+                            last_received = tokio::time::Instant::now();
+                        }
+                        Ok(None) => {
+                            info!("control stream closed by server");
+                            break;
+                        }
+                        Err(e) => {
+                            warn!("control stream error: {e}");
+                            break;
+                        }
+                    }
                 }
             }
         }
+        // Signal that the connection is dead
+        let _ = alive_tx.send(false);
     });
 
-    Ok(EstablishedConnection { mux, tunnel_info, _control_handle: control_handle })
+    Ok(EstablishedConnection { mux, tunnel_info, alive: alive_rx, _control_handle: control_handle })
 }
 
 /// Connect with auto-reconnect and exponential backoff.

@@ -18,6 +18,7 @@ pub async fn run_proxy(
     mut mux: MuxSession,
     local_addr: &str,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
+    mut alive: tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
     info!(local_addr, "proxy loop started, waiting for streams");
 
@@ -39,6 +40,10 @@ pub async fn run_proxy(
             _ = shutdown_wait(&mut shutdown) => {
                 info!("shutdown signal received, stopping proxy");
                 return Ok(());
+            }
+            _ = alive_wait(&mut alive) => {
+                warn!("connection dead (heartbeat timeout), stopping proxy for reconnect");
+                return Err(anyhow::anyhow!("connection dead: heartbeat timeout"));
             }
         };
 
@@ -77,6 +82,15 @@ async fn proxy_stream(remote: yamux::Stream, local_addr: &str) -> Result<()> {
 /// Wait until the shutdown signal fires.
 async fn shutdown_wait(rx: &mut tokio::sync::watch::Receiver<bool>) {
     while !*rx.borrow() {
+        if rx.changed().await.is_err() {
+            return;
+        }
+    }
+}
+
+/// Wait until the alive signal becomes false (connection dead).
+async fn alive_wait(rx: &mut tokio::sync::watch::Receiver<bool>) {
+    while *rx.borrow() {
         if rx.changed().await.is_err() {
             return;
         }

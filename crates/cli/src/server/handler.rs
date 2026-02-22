@@ -16,6 +16,7 @@ use super::listener::proxy_tunnel_connections;
 use super::tunnel_mgr::TunnelManager;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+const HEARTBEAT_MISS_LIMIT: u32 = 3; // disconnect after 3 missed acks (90s)
 const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub async fn handle_agent_connection<T>(
@@ -84,11 +85,13 @@ where
 
     let mux = Arc::new(Mutex::new(mux));
 
+    let ack_counter = Arc::new(std::sync::atomic::AtomicU32::new(0));
     let heartbeat_handle = {
         let ctrl_write = ctrl_write.clone();
         let agent_id = agent_id.clone();
+        let ack_counter = ack_counter.clone();
         tokio::spawn(async move {
-            heartbeat_loop(agent_id, ctrl_write).await;
+            heartbeat_loop(agent_id, ctrl_write, ack_counter).await;
         })
     };
 
@@ -99,6 +102,7 @@ where
         &tunnel_mgr,
         &mux,
         &domain,
+        &ack_counter,
     )
     .await;
 
@@ -116,6 +120,7 @@ async fn control_loop<CR, CW>(
     tunnel_mgr: &TunnelManager,
     mux: &Arc<Mutex<MuxSession>>,
     domain: &str,
+    ack_counter: &Arc<std::sync::atomic::AtomicU32>,
 ) -> Result<()>
 where
     CR: tokio::io::AsyncRead + Unpin + Send,
@@ -141,12 +146,14 @@ where
                 .await?;
             }
             Ok(Some(ControlMessage::Heartbeat)) => {
+                ack_counter.store(0, std::sync::atomic::Ordering::SeqCst);
                 let mut writer = ctrl_write.lock().await;
                 write_message(&mut *writer, &ControlMessage::HeartbeatAck)
                     .await
                     .context("failed to send heartbeat ack")?;
             }
             Ok(Some(ControlMessage::HeartbeatAck)) => {
+                ack_counter.store(0, std::sync::atomic::Ordering::SeqCst);
                 debug!(agent_id = %agent_id, "heartbeat ack received");
             }
             Ok(Some(other)) => {
@@ -235,9 +242,15 @@ where
 async fn heartbeat_loop<CW: tokio::io::AsyncWrite + Unpin + Send>(
     agent_id: String,
     ctrl_write: Arc<Mutex<CW>>,
+    ack_counter: Arc<std::sync::atomic::AtomicU32>,
 ) {
     loop {
         tokio::time::sleep(HEARTBEAT_INTERVAL).await;
+        let missed = ack_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if missed >= HEARTBEAT_MISS_LIMIT {
+            warn!(agent_id = %agent_id, missed = missed + 1, "agent unresponsive, disconnecting");
+            break;
+        }
         let mut writer = ctrl_write.lock().await;
         if let Err(e) = write_message(&mut *writer, &ControlMessage::Heartbeat).await {
             warn!(agent_id = %agent_id, error = %e, "failed to send heartbeat, stopping");

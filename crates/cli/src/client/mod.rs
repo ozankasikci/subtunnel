@@ -48,7 +48,7 @@ impl Client {
                 let shutdown = shutdown.clone();
                 async move {
                     print_tunnel_status(&conn.tunnel_info, &local_addr);
-                    run_proxy(conn.mux, &local_addr, shutdown).await
+                    run_proxy(conn.mux, &local_addr, shutdown, conn.alive).await
                 }
             },
         )
