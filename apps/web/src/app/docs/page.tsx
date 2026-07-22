@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Terminal, BookOpen, Zap, Settings, Server } from "lucide-react";
+import { ArrowRight, Terminal, Zap, Settings, Server } from "lucide-react";
 
 function CodeBlock({
   title,
@@ -28,7 +28,6 @@ const sideNav = [
   { icon: Settings, label: "Installation", href: "#installation" },
   { icon: Server, label: "Self-Hosting", href: "#self-hosting" },
   { icon: Terminal, label: "CLI Reference", href: "#cli-reference" },
-  { icon: BookOpen, label: "Configuration", href: "#configuration" },
 ];
 
 export default function DocsPage() {
@@ -130,7 +129,7 @@ export default function DocsPage() {
             </h3>
             <p className="text-muted mb-4 text-sm leading-relaxed">
               Download the binary for your platform from the{" "}
-              <a href="https://github.com/subtunnel/subtunnel/releases" className="text-accent hover:underline">
+              <a href="https://github.com/ozankasikci/subtunnel/releases" className="text-accent hover:underline">
                 GitHub Releases
               </a>{" "}
               page, extract it, and place it in your PATH.
@@ -284,7 +283,7 @@ export default function DocsPage() {
             <div className="mt-8 rounded-xl border border-accent/20 bg-accent/5 p-6">
               <h4 className="text-sm font-semibold mb-2">Architecture Overview</h4>
               <pre className="text-xs text-muted font-mono leading-relaxed">
-{`Internet → nginx (TLS :443) → SubTunnel HTTP (:8080) → route by Host header
+{`Internet → nginx (TLS :443) → HTTP listener (:8080) → route by Host header
                                                          ↕ yamux streams
 Client (subtunnel local) ←— TLS + yamux (:7835) ——→ SubTunnel Server
         ↕                                              (control + data)
@@ -346,70 +345,19 @@ Client (subtunnel local) ←— TLS + yamux (:7835) ——→ SubTunnel Server
             </div>
           </section>
 
-          {/* Configuration */}
-          <section id="configuration" className="scroll-mt-24 mb-16">
-            <h2 className="text-2xl font-bold tracking-tight mb-4 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 border border-accent/20">
-                <BookOpen className="w-4 h-4 text-accent" />
-              </div>
-              Configuration
-            </h2>
-            <p className="text-muted mb-6 leading-relaxed">
-              SubTunnel can be configured via a{" "}
-              <code className="text-xs bg-surface-2 border border-border rounded px-1.5 py-0.5 font-mono">
-                subtunnel.yml
-              </code>{" "}
-              file in your project root:
-            </p>
-            <CodeBlock title="subtunnel.yml">
-              <code>
-                <span className="text-accent">server</span>:{"\n"}
-                {"  "}
-                <span className="text-muted">url</span>: https://tunnel.example.com
-                {"\n\n"}
-                <span className="text-accent">tunnels</span>:{"\n"}
-                {"  "}
-                <span className="text-muted">web</span>:{"\n"}
-                {"    "}proto: http{"\n"}
-                {"    "}addr: 3000{"\n"}
-                {"    "}domain: app.example.com{"\n\n"}
-                {"  "}
-                <span className="text-muted">api</span>:{"\n"}
-                {"    "}proto: http{"\n"}
-                {"    "}addr: 8080{"\n"}
-                {"    "}domain: api.example.com
-              </code>
-            </CodeBlock>
-            <p className="mt-4 text-sm text-muted">
-              Then start all tunnels with:{" "}
-              <code className="text-xs bg-surface-2 border border-border rounded px-1.5 py-0.5 font-mono">
-                subtunnel start
-              </code>
-            </p>
-          </section>
-
           {/* Next steps */}
           <div className="rounded-xl border border-border bg-surface/50 p-8">
-            <h3 className="text-lg font-semibold mb-2">Need help?</h3>
+            <h3 className="text-lg font-semibold mb-2">Questions or feedback?</h3>
             <p className="text-sm text-muted mb-4">
-              Join our community or check the full API reference.
+              Open an issue in the SubTunnel repository.
             </p>
-            <div className="flex flex-wrap gap-3">
-              <a
-                href="https://github.com/subtunnel"
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm hover:bg-surface-2 transition-colors"
-              >
-                GitHub
-                <ArrowRight className="w-3 h-3" />
-              </a>
-              <a
-                href="https://discord.gg/subtunnel"
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm hover:bg-surface-2 transition-colors"
-              >
-                Discord
-                <ArrowRight className="w-3 h-3" />
-              </a>
-            </div>
+            <a
+              href="https://github.com/ozankasikci/subtunnel/issues"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm hover:bg-surface-2 transition-colors"
+            >
+              GitHub Issues
+              <ArrowRight className="w-3 h-3" />
+            </a>
           </div>
         </div>
       </div>
