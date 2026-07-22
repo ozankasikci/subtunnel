@@ -70,6 +70,18 @@ pub async fn write_message<W: AsyncWrite + Unpin>(
     Ok(())
 }
 
+/// Write a control message, failing if the complete framed write takes too long.
+pub async fn write_message_with_timeout<W: AsyncWrite + Unpin>(
+    writer: &mut W,
+    msg: &ControlMessage,
+    write_timeout: std::time::Duration,
+) -> Result<()> {
+    tokio::time::timeout(write_timeout, write_message(writer, msg))
+        .await
+        .with_context(|| format!("control write timed out after {write_timeout:?}"))??;
+    Ok(())
+}
+
 /// Read a control message from a stream with length-prefix framing.
 ///
 /// Returns `None` if the stream has closed cleanly (EOF on length read).

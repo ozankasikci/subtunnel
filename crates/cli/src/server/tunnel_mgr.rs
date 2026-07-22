@@ -8,6 +8,8 @@ use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tracing::info;
 
+const RANDOM_SUBDOMAIN_ATTEMPTS: usize = 5;
+
 #[derive(Debug)]
 struct TunnelEntry {
     agent_id: String,
@@ -51,19 +53,42 @@ impl TunnelManager {
         protocol: &str,
         requested_subdomain: Option<&str>,
     ) -> Result<RegisteredTunnel> {
-        let subdomain = if let Some(req) = requested_subdomain {
-            validate_subdomain(req)?;
-            req.to_lowercase()
-        } else {
-            generate_subdomain()
-        };
-        let tunnel_id = format!("t_{}", uuid::Uuid::new_v4().as_simple());
-        let (conn_tx, conn_rx) = tokio::sync::mpsc::channel(64);
+        self.register_with_generator(agent_id, protocol, requested_subdomain, generate_subdomain)
+            .await
+    }
 
-        {
+    async fn register_with_generator<G>(
+        &self,
+        agent_id: &str,
+        protocol: &str,
+        requested_subdomain: Option<&str>,
+        mut generator: G,
+    ) -> Result<RegisteredTunnel>
+    where
+        G: FnMut() -> String,
+    {
+        let requested_subdomain = if let Some(req) = requested_subdomain {
+            validate_subdomain(req)?;
+            Some(req.to_lowercase())
+        } else {
+            None
+        };
+        let attempts = if requested_subdomain.is_some() {
+            1
+        } else {
+            RANDOM_SUBDOMAIN_ATTEMPTS
+        };
+
+        for _ in 0..attempts {
+            let subdomain = requested_subdomain.clone().unwrap_or_else(&mut generator);
+            let tunnel_id = format!("t_{}", uuid::Uuid::new_v4().as_simple());
+            let (conn_tx, conn_rx) = tokio::sync::mpsc::channel(64);
             let mut inner = self.inner.write().await;
             if inner.subdomain_to_tunnel.contains_key(&subdomain) {
-                bail!("subdomain collision, try again");
+                if requested_subdomain.is_some() {
+                    bail!("subdomain collision, try again");
+                }
+                continue;
             }
             inner.tunnels.insert(
                 tunnel_id.clone(),
@@ -73,34 +98,58 @@ impl TunnelManager {
                     protocol: protocol.to_string(),
                 },
             );
-            inner.subdomain_to_tunnel.insert(subdomain.clone(), tunnel_id.clone());
+            inner
+                .subdomain_to_tunnel
+                .insert(subdomain.clone(), tunnel_id.clone());
             inner.subdomain_to_tx.insert(subdomain.clone(), conn_tx);
+            drop(inner);
+
+            info!(
+                tunnel_id = %tunnel_id,
+                agent_id = %agent_id,
+                subdomain = %subdomain,
+                protocol = %protocol,
+                "tunnel registered"
+            );
+
+            return Ok(RegisteredTunnel {
+                tunnel_id,
+                subdomain,
+                conn_rx,
+            });
         }
 
-        info!(
-            tunnel_id = %tunnel_id,
-            agent_id = %agent_id,
-            subdomain = %subdomain,
-            protocol = %protocol,
-            "tunnel registered"
-        );
-
-        Ok(RegisteredTunnel { tunnel_id, subdomain, conn_rx })
+        bail!("failed to generate a unique subdomain after {RANDOM_SUBDOMAIN_ATTEMPTS} attempts")
     }
 
     /// Route an incoming connection (with pre-read bytes) to the matching tunnel.
-    pub async fn route_with_preread(&self, subdomain: &str, stream: TcpStream, preread: Vec<u8>) -> Result<()> {
+    pub async fn route_with_preread(
+        &self,
+        subdomain: &str,
+        stream: TcpStream,
+        preread: Vec<u8>,
+    ) -> Result<()> {
         let tx = {
             let inner = self.inner.read().await;
             inner.subdomain_to_tx.get(subdomain).cloned()
         };
         match tx {
             Some(tx) => {
-                tx.send((stream, preread)).await.map_err(|_| anyhow::anyhow!("tunnel channel closed"))?;
+                tx.send((stream, preread))
+                    .await
+                    .map_err(|_| anyhow::anyhow!("tunnel channel closed"))?;
                 Ok(())
             }
             None => bail!("no tunnel for subdomain: {subdomain}"),
         }
+    }
+
+    pub(super) async fn connection_sender(
+        &self,
+        subdomain: &str,
+    ) -> Option<tokio::sync::mpsc::Sender<(TcpStream, Vec<u8>)>> {
+        let inner = self.inner.read().await;
+        inner.subdomain_to_tx.get(subdomain).cloned()
     }
 
     pub async fn unregister(&self, tunnel_id: &str) {
@@ -195,5 +244,24 @@ mod tests {
         assert_eq!(mgr.tunnel_count().await, 3);
         mgr.unregister_agent("agent-1").await;
         assert_eq!(mgr.tunnel_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn random_subdomain_collision_is_retried() {
+        let mgr = TunnelManager::new();
+        let _existing = mgr
+            .register("agent-1", "tcp", Some("deadbeef"))
+            .await
+            .unwrap();
+        let mut generated = ["deadbeef", "cafebabe"].into_iter();
+
+        let registered = mgr
+            .register_with_generator("agent-2", "tcp", None, || {
+                generated.next().unwrap().to_string()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(registered.subdomain, "cafebabe");
     }
 }

@@ -10,8 +10,8 @@ use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 
 use auth::Authenticator;
-use handler::handle_agent_connection;
-use listener::run_http_listener;
+use handler::{handle_agent_connection_with_configs, HeartbeatConfig};
+use listener::{run_http_listener_with_config, ListenerConfig};
 use tunnel_mgr::TunnelManager;
 
 use crate::transport::tls;
@@ -49,10 +49,26 @@ pub struct Server {
     config: ServerConfig,
     tunnel_mgr: TunnelManager,
     auth: Authenticator,
+    heartbeat_config: HeartbeatConfig,
+    listener_config: ListenerConfig,
 }
 
 impl Server {
     pub fn new(config: ServerConfig) -> Self {
+        Self::new_with_timing(
+            config,
+            HeartbeatConfig::default(),
+            ListenerConfig::default(),
+        )
+    }
+
+    /// Construct a server with explicit internal timing.
+    #[doc(hidden)]
+    pub fn new_with_timing(
+        config: ServerConfig,
+        heartbeat_config: HeartbeatConfig,
+        listener_config: ListenerConfig,
+    ) -> Self {
         let auth = match &config.auth_token {
             Some(token) => Authenticator::new(token.clone()),
             None => Authenticator::allow_all(),
@@ -61,6 +77,8 @@ impl Server {
             config,
             tunnel_mgr: TunnelManager::new(),
             auth,
+            heartbeat_config,
+            listener_config,
         }
     }
 
@@ -70,8 +88,7 @@ impl Server {
                 let (certs, key) = tls::load_certs_from_pem(cert_path, key_path)
                     .context("failed to load TLS certificate/key from PEM files")?;
                 info!("using TLS certificate from {cert_path}");
-                tls::server_config(certs, key)
-                    .context("failed to build TLS server config")?
+                tls::server_config(certs, key).context("failed to build TLS server config")?
             }
             _ => {
                 warn!("no --tls-cert/--tls-key provided; using self-signed certificate (development only)");
@@ -87,8 +104,17 @@ impl Server {
         let http_port = self.config.http_port;
         let domain = self.config.domain.clone();
         let extra_domains = self.config.extra_domains.clone();
+        let listener_config = self.listener_config;
         tokio::spawn(async move {
-            if let Err(e) = run_http_listener(http_port, domain, extra_domains, http_tunnel_mgr).await {
+            if let Err(e) = run_http_listener_with_config(
+                http_port,
+                domain,
+                extra_domains,
+                http_tunnel_mgr,
+                listener_config,
+            )
+            .await
+            {
                 error!(error = %e, "HTTP listener failed");
             }
         });
@@ -111,10 +137,17 @@ impl Server {
                 Ok((stream, addr)) => {
                     info!(peer = %addr, "new agent connection");
 
+                    if let Err(e) = crate::transport::set_tcp_keepalive(&stream) {
+                        warn!(peer = %addr, error = %e, "failed to set TCP keepalive");
+                        continue;
+                    }
+
                     let tunnel_mgr = self.tunnel_mgr.clone();
                     let auth = self.auth.clone();
                     let domain = self.config.domain.clone();
                     let tls_cfg = tls_config.clone();
+                    let heartbeat_config = self.heartbeat_config;
+                    let listener_config = self.listener_config;
 
                     tokio::spawn(async move {
                         let tls_stream = match tls::tls_accept(tls_cfg, stream).await {
@@ -124,8 +157,15 @@ impl Server {
                                 return;
                             }
                         };
-                        if let Err(e) =
-                            handle_agent_connection(tls_stream, tunnel_mgr, auth, domain).await
+                        if let Err(e) = handle_agent_connection_with_configs(
+                            tls_stream,
+                            tunnel_mgr,
+                            auth,
+                            domain,
+                            heartbeat_config,
+                            listener_config,
+                        )
+                        .await
                         {
                             error!(peer = %addr, error = %e, "agent handler error");
                         }

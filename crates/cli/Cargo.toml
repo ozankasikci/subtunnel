@@ -35,6 +35,7 @@ rand = "0.8"
 rustls-pki-types = "1"
 webpki-roots = "0.26"
 rustls-pemfile = "2"
+socket2 = "0.6"
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -3,7 +3,10 @@
 pub mod connector;
 pub mod local_proxy;
 
-pub use connector::{connect, connect_with_retry, ConnectTlsOptions, EstablishedConnection, TunnelInfo};
+pub use connector::{
+    connect, connect_with_config, connect_with_retry, ClientControlConfig, ConnectTlsOptions,
+    EstablishedConnection, TunnelInfo,
+};
 pub use local_proxy::run_proxy;
 
 use anyhow::Result;
@@ -47,8 +50,16 @@ impl Client {
                 let local_addr = local_addr.clone();
                 let shutdown = shutdown.clone();
                 async move {
-                    print_tunnel_status(&conn.tunnel_info, &local_addr);
-                    run_proxy(conn.mux, &local_addr, shutdown, conn.alive).await
+                    let EstablishedConnection {
+                        mux,
+                        tunnel_info,
+                        alive,
+                        _control_handle: control_guard,
+                    } = conn;
+                    print_tunnel_status(&tunnel_info, &local_addr);
+                    let result = run_proxy(mux, &local_addr, shutdown, alive).await;
+                    drop(control_guard);
+                    result
                 }
             },
         )
