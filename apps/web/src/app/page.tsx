@@ -10,7 +10,7 @@ const features = [
   {
     title: "Wildcard + custom domains",
     description:
-      "Every tunnel gets a subdomain on your domain — or bring any domain you own.",
+      "Every tunnel gets a subdomain on your domain, or bring any domain you own.",
   },
   {
     title: "TLS via nginx + Let's Encrypt",
@@ -83,7 +83,7 @@ function TerminalDemo() {
           <span className="h-2.5 w-2.5 rounded-full bg-accent/70" />
         </div>
         <span className="font-mono text-[11px] text-muted">
-          subtunnel — zsh
+          subtunnel · zsh
         </span>
         <span aria-hidden="true" />
       </div>
