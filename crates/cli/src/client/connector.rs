@@ -244,15 +244,15 @@ pub async fn connect_with_config(
         other => bail!("unexpected message during auth: {other:?}"),
     }
 
-    // Send TunnelReq
-    let tunnel_req = ControlMessage::TunnelReq {
+    // Send RegisterReq
+    let register_req = ControlMessage::RegisterReq {
         protocol: "tcp".into(),
         subdomain: requested_subdomain.map(|s| s.to_string()),
     };
-    write_message_with_timeout(&mut control, &tunnel_req, control_config.write_timeout).await?;
+    write_message_with_timeout(&mut control, &register_req, control_config.write_timeout).await?;
     debug!("sent tunnel request");
 
-    // Read TunnelResp
+    // Read RegisterResp
     let resp = read_setup_response(
         &mut control,
         control_config.write_timeout,
@@ -260,7 +260,7 @@ pub async fn connect_with_config(
     )
     .await?;
     let tunnel_info = match resp {
-        ControlMessage::TunnelResp {
+        ControlMessage::RegisterResp {
             success: true,
             tunnel_id,
             subdomain,
@@ -270,7 +270,7 @@ pub async fn connect_with_config(
             public_url: message,
             subdomain,
         },
-        ControlMessage::TunnelResp {
+        ControlMessage::RegisterResp {
             success: false,
             message,
             ..
@@ -517,7 +517,7 @@ mod tests {
                     success: true,
                     message: "welcome".into(),
                 },
-                ControlMessage::TunnelResp {
+                ControlMessage::RegisterResp {
                     success: true,
                     tunnel_id: "tunnel-id".into(),
                     subdomain: "setup".into(),
@@ -572,7 +572,7 @@ mod tests {
         .unwrap();
         assert!(matches!(
             tunnel_response,
-            ControlMessage::TunnelResp { success: true, .. }
+            ControlMessage::RegisterResp { success: true, .. }
         ));
 
         server_task.await.unwrap();

@@ -1,5 +1,7 @@
 # SubTunnel — Production SaaS Architecture
 
+*This document is a forward-looking design. The current implementation consists of the CLI (server and local commands) and the marketing site. Sections describing Postgres, Redis, JWT authentication, dashboards, and multi-region operation are future design, not shipped functionality.*
+
 > Technical architecture document for evolving SubTunnel from a single-user self-hosted tunnel into a multi-tenant SaaS product.
 >
 > Last updated: 2026-02-12
@@ -36,7 +38,7 @@ SubTunnel is a functional TCP/HTTP tunnel with a clean Rust architecture:
 | **Client** | ✅ Complete | Connects with TLS + yamux, auto-reconnect with exponential backoff |
 | **TLS** | ✅ Dev-ready | Self-signed cert generation via `rcgen`; `NoVerifier` on client side |
 | **Mux** | ✅ Complete | Yamux session driver with background polling, channel-based stream delivery |
-| **Auth** | ⚠️ Minimal | Single shared token (`TUNNELR_TOKEN`), constant-time comparison |
+| **Auth** | ⚠️ Minimal | Single shared token (`SUBTUNNEL_TOKEN`), constant-time comparison |
 | **Subdomain routing** | ✅ Complete | Host header sniffing, wildcard domain matching, custom subdomain requests |
 | **Heartbeat** | ✅ Complete | Bi-directional heartbeat every 30s |
 
@@ -165,14 +167,14 @@ pub enum ControlMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         plan: Option<Plan>,
     },
-    TunnelReq {
+    RegisterReq {
         protocol: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         subdomain: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         labels: Option<HashMap<String, String>>,
     },
-    TunnelResp {
+    RegisterResp {
         success: bool,
         tunnel_id: String,
         subdomain: String,
@@ -1505,7 +1507,7 @@ version: "3.9"
 
 services:
   subtunnel:
-    image: ghcr.io/winterwindgames/subtunnel:latest
+    image: ghcr.io/ozankasikci/subtunnel:latest
     ports:
       - "7835:7835"   # Control plane
       - "8080:8080"   # HTTP tunnel traffic

@@ -42,7 +42,7 @@ enum Command {
         extra_domains: Vec<String>,
 
         /// Authentication token that agents must provide.
-        #[arg(long, env = "TUNNELR_TOKEN")]
+        #[arg(long, env = "SUBTUNNEL_TOKEN")]
         token: Option<String>,
 
         /// Path to TLS certificate PEM file (e.g. Let's Encrypt fullchain.pem).
@@ -64,7 +64,7 @@ enum Command {
         to: String,
 
         /// Authentication token.
-        #[arg(long, env = "TUNNELR_TOKEN")]
+        #[arg(long, env = "SUBTUNNEL_TOKEN")]
         token: String,
 
         /// Request a specific subdomain (e.g. "myapp" for myapp.tunnel.example.com).

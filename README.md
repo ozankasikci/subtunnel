@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/winterwindgames/subtunnel/actions"><img src="https://github.com/winterwindgames/subtunnel/actions/workflows/release.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/ozankasikci/subtunnel/actions"><img src="https://github.com/ozankasikci/subtunnel/actions/workflows/release.yml/badge.svg" alt="Build"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://subtunnel.dev"><img src="https://img.shields.io/badge/docs-subtunnel.dev-green.svg" alt="Docs"></a>
 </p>

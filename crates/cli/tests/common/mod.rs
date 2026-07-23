@@ -163,7 +163,7 @@ impl FakeAgent {
 
         write_message(
             &mut control,
-            &ControlMessage::TunnelReq {
+            &ControlMessage::RegisterReq {
                 protocol: "tcp".into(),
                 subdomain: Some(subdomain.into()),
             },
@@ -174,7 +174,7 @@ impl FakeAgent {
                 .await?
                 .context("server closed during tunnel registration")?
             {
-                ControlMessage::TunnelResp { success: true, .. } => break,
+                ControlMessage::RegisterResp { success: true, .. } => break,
                 ControlMessage::Heartbeat => {
                     write_message(&mut control, &ControlMessage::HeartbeatAck).await?;
                 }

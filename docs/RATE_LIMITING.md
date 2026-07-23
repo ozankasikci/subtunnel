@@ -15,10 +15,10 @@
 
 ### 1. Connection Layer (Tunnel Creation)
 
-**When**: Client sends `TunnelReq` control message.
+**When**: Client sends `RegisterReq` control message.
 **Check**: `RateLimiter::check(user_id, Plan, Action::OpenTunnel)`
 **Enforces**: Max concurrent tunnels per plan.
-**On rejection**: Server responds with `TunnelResp { success: false, message: "tunnel limit reached (3/3)" }`.
+**On rejection**: Server responds with `RegisterResp { success: false, message: "tunnel limit reached (3/3)" }`.
 **Release**: Call `RateLimiter::release_tunnel(user_id)` when tunnel disconnects.
 
 ### 2. Request Layer (HTTP Requests)

@@ -261,7 +261,7 @@ where
         }
 
         match msg {
-            Ok(Some(ControlMessage::TunnelReq {
+            Ok(Some(ControlMessage::RegisterReq {
                 protocol,
                 subdomain,
             })) => {
@@ -318,7 +318,7 @@ where
                 let mut writer = context.ctrl_write.lock().await;
                 write_message_with_timeout(
                     &mut *writer,
-                    &ControlMessage::TunnelResp {
+                    &ControlMessage::RegisterResp {
                         success: true,
                         tunnel_id: tid.clone(),
                         subdomain: subdomain.clone(),
@@ -351,7 +351,7 @@ where
             let mut writer = context.ctrl_write.lock().await;
             write_message_with_timeout(
                 &mut *writer,
-                &ControlMessage::TunnelResp {
+                &ControlMessage::RegisterResp {
                     success: false,
                     tunnel_id: String::new(),
                     subdomain: String::new(),

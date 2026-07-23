@@ -21,7 +21,7 @@ const serverFlags = [
   ["--extra-domain", "Additional accepted domain. Repeatable."],
   [
     "--token",
-    "Authentication token agents must provide. Env: TUNNELR_TOKEN.",
+    "Authentication token agents must provide. Env: SUBTUNNEL_TOKEN.",
   ],
   ["--tls-cert", "TLS certificate PEM path."],
   ["--tls-key", "TLS private key PEM path."],
@@ -30,7 +30,7 @@ const serverFlags = [
 const localFlags = [
   ["<port>", "Positional local port to expose."],
   ["--to", "Server address in host:port format."],
-  ["--token", "Authentication token. Env: TUNNELR_TOKEN."],
+  ["--token", "Authentication token. Env: SUBTUNNEL_TOKEN."],
   ["--subdomain", "Request a specific subdomain."],
   [
     "--tls-verify",

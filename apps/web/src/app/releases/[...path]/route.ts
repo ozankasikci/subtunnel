@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const REPO = "winterwindgames/subtunnel";
+const REPO = "ozankasikci/subtunnel";
 
 export async function GET(
   _req: NextRequest,
@@ -15,11 +15,12 @@ export async function GET(
 
   const [tag, filename] = path;
   const downloadUrl = `https://github.com/${REPO}/releases/download/${tag}/${filename}`;
+  const token = process.env.GITHUB_TOKEN;
 
   // Fetch from GitHub with auth to access private repo assets
   const res = await fetch(downloadUrl, {
     headers: {
-      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+      ...(token ? { Authorization: `token ${token}` } : {}),
       Accept: "application/octet-stream",
     },
     redirect: "follow",
