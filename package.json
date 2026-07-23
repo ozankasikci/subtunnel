@@ -7,7 +7,6 @@
   },
   "scripts": {
     "dev:web": "pnpm --filter @subtunnel/web dev",
-    "dev:dashboard": "pnpm --filter @subtunnel/dashboard dev",
     "build": "pnpm -r build"
   }
 }
