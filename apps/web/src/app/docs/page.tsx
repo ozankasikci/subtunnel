@@ -1,53 +1,173 @@
-import Link from "next/link";
-import { ArrowRight, Terminal, Zap, Settings, Server } from "lucide-react";
+import type { ReactNode } from "react";
+
+const installCommand =
+  "curl -sSL https://www.subtunnel.dev/install.sh | sh";
+
+const sideNav = [
+  { label: "Quick Start", href: "#quickstart" },
+  { label: "Installation", href: "#installation" },
+  { label: "Self-Hosting", href: "#self-hosting" },
+  { label: "CLI Reference", href: "#cli-reference" },
+];
+
+const serverFlags = [
+  ["--port", "Control-plane listen port. Default: 7835."],
+  [
+    "--http-port",
+    "HTTP listener receiving proxied traffic from nginx. Default: 8080.",
+  ],
+  ["--host", "Bind address. Default: 0.0.0.0."],
+  ["--domain", "Required. Domain for tunnel subdomains."],
+  ["--extra-domain", "Additional accepted domain. Repeatable."],
+  [
+    "--token",
+    "Authentication token agents must provide. Env: TUNNELR_TOKEN.",
+  ],
+  ["--tls-cert", "TLS certificate PEM path."],
+  ["--tls-key", "TLS private key PEM path."],
+];
+
+const localFlags = [
+  ["<port>", "Positional local port to expose."],
+  ["--to", "Server address in host:port format."],
+  ["--token", "Authentication token. Env: TUNNELR_TOKEN."],
+  ["--subdomain", "Request a specific subdomain."],
+  [
+    "--tls-verify",
+    "Verify the server TLS certificate. Default: true. Set false for self-signed certificates.",
+  ],
+  ["--tls-ca", "Custom CA certificate PEM path."],
+];
+
+function SectionHeader({ kicker, children }: { kicker: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-accent">
+        {kicker}
+      </p>
+      <h2 className="max-w-2xl text-3xl font-bold leading-tight tracking-[-0.04em] text-foreground sm:text-4xl">
+        {children}
+      </h2>
+    </div>
+  );
+}
+
+function TerminalWindow({ children }: { children: ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface text-left shadow-2xl shadow-black/30">
+      <div className="grid h-11 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-surface-2 px-4">
+        <div className="flex gap-1.5" aria-hidden="true">
+          <span className="h-2.5 w-2.5 rounded-full bg-foreground/25" />
+          <span className="h-2.5 w-2.5 rounded-full bg-foreground/15" />
+          <span className="h-2.5 w-2.5 rounded-full bg-accent/70" />
+        </div>
+        <span className="font-mono text-[11px] text-muted">
+          subtunnel · zsh
+        </span>
+        <span aria-hidden="true" />
+      </div>
+      <div className="overflow-x-auto p-5 sm:p-7">{children}</div>
+    </div>
+  );
+}
 
 function CodeBlock({
-  title,
   children,
+  label,
 }: {
-  title?: string;
-  children: React.ReactNode;
+  children: ReactNode;
+  label?: string;
 }) {
   return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
-      {title && (
-        <div className="flex items-center gap-2 px-4 py-3 bg-surface-2 border-b border-border">
-          <Terminal className="w-3.5 h-3.5 text-muted" />
-          <span className="text-xs text-muted font-mono">{title}</span>
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      {label ? (
+        <div className="border-b border-border bg-surface-2 px-4 py-2.5 font-mono text-[11px] text-muted">
+          {label}
         </div>
-      )}
-      <pre className="p-6 font-mono text-sm leading-relaxed overflow-x-auto">
-        {children}
+      ) : null}
+      <pre className="overflow-x-auto p-4 font-mono text-xs leading-6 text-foreground sm:p-5">
+        <code>{children}</code>
       </pre>
     </div>
   );
 }
 
-const sideNav = [
-  { icon: Zap, label: "Quick Start", href: "#quickstart" },
-  { icon: Settings, label: "Installation", href: "#installation" },
-  { icon: Server, label: "Self-Hosting", href: "#self-hosting" },
-  { icon: Terminal, label: "CLI Reference", href: "#cli-reference" },
-];
+function FlagTable({ rows }: { rows: string[][] }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border">
+      <table className="w-full border-collapse text-left">
+        <thead className="bg-surface-2">
+          <tr>
+            <th className="w-40 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted sm:w-52 sm:px-5">
+              Flag
+            </th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted sm:px-5">
+              Description
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([flag, description]) => (
+            <tr key={flag} className="border-t border-border bg-surface">
+              <td className="px-4 py-4 align-top sm:px-5">
+                <code className="font-mono text-xs text-accent sm:text-sm">
+                  {flag}
+                </code>
+              </td>
+              <td className="px-4 py-4 text-sm leading-6 text-muted sm:px-5">
+                {description}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GuideStep({
+  number,
+  title,
+  description,
+  children,
+}: {
+  number: string;
+  title: string;
+  description: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <li className="bg-background p-6 sm:p-8">
+      <div className="grid gap-5 sm:grid-cols-[48px_1fr] sm:gap-7">
+        <span className="font-mono text-xs text-accent">{number}</span>
+        <div className="min-w-0">
+          <h3 className="font-semibold tracking-tight text-foreground">
+            {title}
+          </h3>
+          <div className="mt-2 text-sm leading-6 text-muted">{description}</div>
+          <div className="mt-5">{children}</div>
+        </div>
+      </div>
+    </li>
+  );
+}
 
 export default function DocsPage() {
   return (
-    <div className="mx-auto max-w-6xl px-6 py-16 md:py-24">
-      <div className="grid lg:grid-cols-[220px_1fr] gap-12">
-        {/* Sidebar */}
+    <div className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
+      <div className="grid gap-16 lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-20">
         <aside className="hidden lg:block">
           <div className="sticky top-24">
-            <h4 className="text-xs font-medium text-muted uppercase tracking-wider mb-4">
+            <p className="mb-5 text-xs font-semibold uppercase tracking-[0.24em] text-muted">
               Documentation
-            </h4>
-            <nav className="space-y-1">
+            </p>
+            <nav className="flex flex-col border-l border-border" aria-label="Documentation">
               {sideNav.map((item) => (
                 <a
                   key={item.href}
                   href={item.href}
-                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted hover:text-foreground hover:bg-surface transition-colors"
+                  className="-ml-px border-l border-transparent py-2.5 pl-4 text-sm text-muted transition-colors hover:border-accent hover:text-foreground"
                 >
-                  <item.icon className="w-4 h-4" />
                   {item.label}
                 </a>
               ))}
@@ -55,310 +175,258 @@ export default function DocsPage() {
           </div>
         </aside>
 
-        {/* Content */}
-        <div className="max-w-3xl">
-          <div className="mb-12">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Documentation
-            </h1>
-            <p className="mt-4 text-lg text-muted">
-              Get up and running with SubTunnel in under a minute.
+        <div className="min-w-0 max-w-4xl">
+          <section id="quickstart" className="scroll-mt-24 pb-24 sm:pb-32">
+            <SectionHeader kicker="Quick Start">
+              Up and running in a minute
+            </SectionHeader>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-muted sm:text-lg">
+              Install the CLI, connect it to your SubTunnel server, and expose a
+              local port on your own domain.
             </p>
-          </div>
 
-          {/* Quick Start */}
-          <section id="quickstart" className="scroll-mt-24 mb-16">
-            <h2 className="text-2xl font-bold tracking-tight mb-4 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 border border-accent/20">
-                <Zap className="w-4 h-4 text-accent" />
-              </div>
-              Quick Start
-            </h2>
-            <p className="text-muted mb-6 leading-relaxed">
-              Install the CLI, point it at your server, and your local port is live on the internet.
-            </p>
-            <CodeBlock title="Terminal">
-              <code>
-                <span className="text-muted"># 1. Install SubTunnel</span>
-                {"\n"}
-                <span className="text-accent">$</span> curl -sSL https://www.subtunnel.dev/install.sh | sh{"\n\n"}
-                <span className="text-muted"># 2. Expose a local port through your server</span>
-                {"\n"}
-                <span className="text-accent">$</span> subtunnel local 3000 \{"\n"}
-                {"    "}--to your-server.example.com:7835 \{"\n"}
-                {"    "}--token YOUR_TOKEN \{"\n"}
-                {"    "}--subdomain myapp
-              </code>
-            </CodeBlock>
-            <p className="mt-4 text-sm text-muted">
-              Your local server on port 3000 is now accessible at{" "}
-              <code className="text-xs bg-surface-2 border border-border rounded px-1.5 py-0.5 font-mono">
-                https://myapp.your-domain.com
-              </code>
-            </p>
+            <div className="mt-10">
+              <TerminalWindow>
+                <div className="min-w-[720px] font-mono text-[13px] leading-7 text-foreground sm:text-sm">
+                  <p className="whitespace-pre">
+                    <span className="text-accent">$</span> {installCommand}
+                  </p>
+                  <p className="h-7" aria-hidden="true" />
+                  <p className="whitespace-pre">
+                    <span className="text-accent">$</span>{" "}
+                    {"subtunnel local 3000 --to your-server.example.com:7835 \\"}
+                  </p>
+                  <p className="whitespace-pre">
+                    {"    --token YOUR_TOKEN --subdomain myapp"}
+                  </p>
+                  <p className="mt-2 whitespace-pre text-muted">
+                    {"Forwarding "}
+                    <span className="text-accent">
+                      https://myapp.your-server.example.com
+                    </span>
+                    {" -> localhost:3000"}
+                  </p>
+                </div>
+              </TerminalWindow>
+            </div>
           </section>
 
-          {/* Installation */}
-          <section id="installation" className="scroll-mt-24 mb-16">
-            <h2 className="text-2xl font-bold tracking-tight mb-4 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 border border-accent/20">
-                <Settings className="w-4 h-4 text-accent" />
-              </div>
-              Installation
-            </h2>
-            <p className="text-muted mb-6 leading-relaxed">
-              Install the SubTunnel CLI on macOS or Linux. A single binary, no dependencies.
+          <section
+            id="installation"
+            className="scroll-mt-24 border-t border-border py-24 sm:py-32"
+          >
+            <SectionHeader kicker="Installation">Install the binary</SectionHeader>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-muted">
+              The install script detects your platform and places one static
+              binary in <code className="font-mono text-sm text-foreground">/usr/local/bin</code>.
+              It supports macOS and Linux.
             </p>
 
-            <h3 className="text-lg font-semibold mb-3">macOS / Linux</h3>
-            <CodeBlock>
-              <code>
-                <span className="text-accent">$</span> curl -sSL https://www.subtunnel.dev/install.sh | sh
-              </code>
-            </CodeBlock>
-            <p className="mt-3 text-sm text-muted">
-              Supports macOS (Apple Silicon &amp; Intel) and Linux (x86_64 &amp; ARM64).
-              The script detects your platform, downloads the latest release, and installs to{" "}
-              <code className="text-xs bg-surface-2 border border-border rounded px-1.5 py-0.5 font-mono">
-                /usr/local/bin
-              </code>.
-            </p>
+            <div className="mt-8">
+              <CodeBlock>
+                <span className="text-accent">$</span> {installCommand}
+              </CodeBlock>
+            </div>
 
-            <h3 className="text-lg font-semibold mt-8 mb-3">
-              Manual Download
-            </h3>
-            <p className="text-muted mb-4 text-sm leading-relaxed">
-              Download the binary for your platform from the{" "}
-              <a href="https://github.com/ozankasikci/subtunnel/releases" className="text-accent hover:underline">
+            <p className="mt-5 text-sm leading-6 text-muted">
+              <span className="font-semibold text-foreground">Manual download.</span>{" "}
+              Download the binary for your platform from{" "}
+              <a
+                href="https://github.com/ozankasikci/subtunnel/releases"
+                className="text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-accent"
+              >
                 GitHub Releases
-              </a>{" "}
-              page, extract it, and place it in your PATH.
+              </a>
+              , extract it, and place it in your PATH.
             </p>
           </section>
 
-          {/* Self-Hosting */}
-          <section id="self-hosting" className="scroll-mt-24 mb-16">
-            <h2 className="text-2xl font-bold tracking-tight mb-4 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 border border-accent/20">
-                <Server className="w-4 h-4 text-accent" />
-              </div>
-              Self-Hosting the Server
-            </h2>
-            <p className="text-muted mb-6 leading-relaxed">
-              SubTunnel is fully self-hosted. You run the server on your own VPS (EC2, DigitalOcean, Hetzner, etc.)
-              and connect clients to it. Here&apos;s how to set it up from scratch.
+          <section
+            id="self-hosting"
+            className="scroll-mt-24 border-t border-border py-24 sm:py-32"
+          >
+            <SectionHeader kicker="Self-Hosting">Run your own server</SectionHeader>
+            <p className="mt-5 max-w-3xl text-base leading-7 text-muted sm:text-lg">
+              Everything below runs on one small VPS. You need a domain and a
+              server with ports 80, 443, and 7835 reachable.
             </p>
 
-            <h3 className="text-lg font-semibold mb-3">Prerequisites</h3>
-            <ul className="text-muted text-sm mb-8 space-y-2 list-disc list-inside">
-              <li>A VPS with a public IP address (any Linux distro)</li>
-              <li>A domain name with DNS access (e.g. Cloudflare, Route 53)</li>
-              <li>Ports 7835 (control plane) and 8080 (HTTP traffic) open in your security group / firewall</li>
-            </ul>
+            <ol className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border">
+              <GuideStep
+                number="01"
+                title="Point DNS at your server"
+                description="Create A records for the tunnel domain and its wildcard, both pointing to your server's public IP address."
+              >
+                <CodeBlock label="DNS records">
+                  <span className="text-accent">A</span>{"     "}
+                  tunnel.example.com{"      "}→ 203.0.113.10{"\n"}
+                  <span className="text-accent">A</span>{"     "}
+                  *.tunnel.example.com{"    "}→ 203.0.113.10
+                </CodeBlock>
+              </GuideStep>
 
-            <h3 className="text-lg font-semibold mb-3">1. DNS Setup</h3>
-            <p className="text-muted mb-4 text-sm leading-relaxed">
-              Point your domain and a wildcard subdomain to your server&apos;s IP address.
-              This allows SubTunnel to route traffic to tunnels based on subdomain.
-            </p>
-            <CodeBlock title="DNS Records">
-              <code>
-                <span className="text-muted"># Replace 203.0.113.10 with your server&apos;s public IP</span>
-                {"\n\n"}
-                <span className="text-accent">A</span>{"     "}tunnel.example.com{"      "}→ 203.0.113.10{"\n"}
-                <span className="text-accent">A</span>{"     "}*.tunnel.example.com{"    "}→ 203.0.113.10
-              </code>
-            </CodeBlock>
+              <GuideStep
+                number="02"
+                title="Install SubTunnel on the server"
+                description="SSH into the VPS and install the same static binary used by the client."
+              >
+                <CodeBlock>
+                  <span className="text-accent">$</span> {installCommand}
+                </CodeBlock>
+              </GuideStep>
 
-            <h3 className="text-lg font-semibold mt-8 mb-3">2. Install SubTunnel on Your Server</h3>
-            <CodeBlock title="SSH into your server">
-              <code>
-                <span className="text-accent">$</span> curl -sSL https://www.subtunnel.dev/install.sh | sh
-              </code>
-            </CodeBlock>
+              <GuideStep
+                number="03"
+                title="Generate a token"
+                description="Create a shared secret that clients will use to authenticate with the server."
+              >
+                <CodeBlock>
+                  <span className="text-accent">$</span> openssl rand -hex 16
+                </CodeBlock>
+              </GuideStep>
 
-            <h3 className="text-lg font-semibold mt-8 mb-3">3. Generate a Token</h3>
-            <p className="text-muted mb-4 text-sm leading-relaxed">
-              Create a shared secret that clients will use to authenticate with the server.
-            </p>
-            <CodeBlock>
-              <code>
-                <span className="text-accent">$</span> openssl rand -hex 16{"\n"}
-                <span className="text-muted"># e.g. a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6</span>
-              </code>
-            </CodeBlock>
+              <GuideStep
+                number="04"
+                title="Set up nginx TLS termination"
+                description="Use nginx to terminate TLS and forward HTTP traffic to SubTunnel's HTTP listener on port 8080."
+              >
+                <CodeBlock label="nginx.conf">
+                  <span className="text-muted">
+                    # Wildcard HTTPS routes *.tunnel.example.com to SubTunnel
+                  </span>
+                  {"\n"}
+                  {'server {'}{"\n"}
+                  {"    "}listen 443 ssl;{"\n"}
+                  {"    "}server_name *.tunnel.example.com;{"\n\n"}
+                  {"    "}ssl_certificate /etc/letsencrypt/live/tunnel.example.com/fullchain.pem;{"\n"}
+                  {"    "}ssl_certificate_key /etc/letsencrypt/live/tunnel.example.com/privkey.pem;{"\n\n"}
+                  {"    "}location / {'{'}{"\n"}
+                  {"        "}proxy_pass http://127.0.0.1:8080;{"\n"}
+                  {"        "}proxy_set_header Host $host;{"\n"}
+                  {"        "}proxy_set_header X-Real-IP $remote_addr;{"\n"}
+                  {"        "}proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;{"\n"}
+                  {"        "}proxy_set_header X-Forwarded-Proto $scheme;{"\n"}
+                  {"    "}{'}'}{"\n"}
+                  {'}'}
+                </CodeBlock>
+                <p className="mt-4 text-sm leading-6 text-muted">
+                  For wildcard certificates, use DNS-based validation with
+                  certbot:{" "}
+                  <code className="font-mono text-xs text-foreground">
+                    certbot certonly --dns-cloudflare -d tunnel.example.com -d
+                    *.tunnel.example.com
+                  </code>
+                  .
+                </p>
+              </GuideStep>
 
-            <h3 className="text-lg font-semibold mt-8 mb-3">4. Set Up nginx (TLS Termination)</h3>
-            <p className="text-muted mb-4 text-sm leading-relaxed">
-              Use nginx as a reverse proxy to handle TLS termination and forward HTTP traffic
-              to SubTunnel&apos;s HTTP listener. This gives you automatic HTTPS via Let&apos;s Encrypt.
-            </p>
-            <CodeBlock title="nginx.conf">
-              <code>
-                <span className="text-muted"># Wildcard HTTPS — routes *.tunnel.example.com to SubTunnel</span>
-                {"\n"}
-                server {"{"}{"\n"}
-                {"    "}listen 443 ssl;{"\n"}
-                {"    "}server_name *.tunnel.example.com;{"\n"}
-                {"\n"}
-                {"    "}ssl_certificate /etc/letsencrypt/live/tunnel.example.com/fullchain.pem;{"\n"}
-                {"    "}ssl_certificate_key /etc/letsencrypt/live/tunnel.example.com/privkey.pem;{"\n"}
-                {"\n"}
-                {"    "}location / {"{"}{"\n"}
-                {"        "}proxy_pass http://127.0.0.1:8080;{"\n"}
-                {"        "}proxy_set_header Host $host;{"\n"}
-                {"        "}proxy_set_header X-Real-IP $remote_addr;{"\n"}
-                {"        "}proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;{"\n"}
-                {"        "}proxy_set_header X-Forwarded-Proto $scheme;{"\n"}
-                {"    "}{"}"}{"\n"}
-                {"}"}
-              </code>
-            </CodeBlock>
-            <p className="mt-3 text-sm text-muted">
-              For wildcard certificates, use DNS-based validation with certbot:{" "}
-              <code className="text-xs bg-surface-2 border border-border rounded px-1.5 py-0.5 font-mono">
-                certbot certonly --dns-cloudflare -d tunnel.example.com -d *.tunnel.example.com
-              </code>
-            </p>
+              <GuideStep
+                number="05"
+                title="Start the server"
+                description="Start the control plane on port 7835 and the internal HTTP listener on port 8080."
+              >
+                <CodeBlock>
+                  <span className="text-accent">$</span> subtunnel server --domain tunnel.example.com --token YOUR_TOKEN --port 7835 --http-port 8080
+                </CodeBlock>
+              </GuideStep>
 
-            <h3 className="text-lg font-semibold mt-8 mb-3">5. Start the Server</h3>
-            <CodeBlock>
-              <code>
-                <span className="text-accent">$</span> subtunnel server \{"\n"}
-                {"    "}--domain tunnel.example.com \{"\n"}
-                {"    "}--token YOUR_TOKEN \{"\n"}
-                {"    "}--port 7835 \{"\n"}
-                {"    "}--http-port 8080
-              </code>
-            </CodeBlock>
+              <GuideStep
+                number="06"
+                title="Run as a systemd service"
+                description="For production, run SubTunnel as a systemd service so it starts on boot and restarts automatically."
+              >
+                <div className="space-y-4">
+                  <CodeBlock label="/etc/systemd/system/subtunnel.service">
+                    [Unit]{"\n"}
+                    Description=SubTunnel Server{"\n"}
+                    After=network.target{"\n\n"}
+                    [Service]{"\n"}
+                    Type=simple{"\n"}
+                    User=subtunnel{"\n"}
+                    ExecStart=/usr/local/bin/subtunnel server {"\\"}{"\n"}
+                    {"    "}--domain tunnel.example.com {"\\"}{"\n"}
+                    {"    "}--token YOUR_TOKEN {"\\"}{"\n"}
+                    {"    "}--port 7835 {"\\"}{"\n"}
+                    {"    "}--http-port 8080{"\n"}
+                    Restart=always{"\n"}
+                    RestartSec=5{"\n\n"}
+                    [Install]{"\n"}
+                    WantedBy=multi-user.target
+                  </CodeBlock>
+                  <CodeBlock label="Enable and start">
+                    <span className="text-accent">$</span> sudo systemctl enable subtunnel{"\n"}
+                    <span className="text-accent">$</span> sudo systemctl start subtunnel{"\n"}
+                    <span className="text-accent">$</span> sudo systemctl status subtunnel
+                  </CodeBlock>
+                </div>
+              </GuideStep>
 
-            <h3 className="text-lg font-semibold mt-8 mb-3">6. Run as a systemd Service</h3>
-            <p className="text-muted mb-4 text-sm leading-relaxed">
-              For production, run SubTunnel as a systemd service so it starts on boot and auto-restarts.
-            </p>
-            <CodeBlock title="/etc/systemd/system/subtunnel.service">
-              <code>
-                [Unit]{"\n"}
-                Description=SubTunnel Server{"\n"}
-                After=network.target{"\n"}
-                {"\n"}
-                [Service]{"\n"}
-                Type=simple{"\n"}
-                User=subtunnel{"\n"}
-                ExecStart=/usr/local/bin/subtunnel server \{"\n"}
-                {"    "}--domain tunnel.example.com \{"\n"}
-                {"    "}--token YOUR_TOKEN \{"\n"}
-                {"    "}--port 7835 \{"\n"}
-                {"    "}--http-port 8080{"\n"}
-                Restart=always{"\n"}
-                RestartSec=5{"\n"}
-                {"\n"}
-                [Install]{"\n"}
-                WantedBy=multi-user.target
-              </code>
-            </CodeBlock>
-            <CodeBlock title="Enable and start">
-              <code>
-                <span className="text-accent">$</span> sudo systemctl enable subtunnel{"\n"}
-                <span className="text-accent">$</span> sudo systemctl start subtunnel{"\n"}
-                <span className="text-accent">$</span> sudo systemctl status subtunnel
-              </code>
-            </CodeBlock>
-
-            <h3 className="text-lg font-semibold mt-8 mb-3">7. Connect a Client</h3>
-            <p className="text-muted mb-4 text-sm leading-relaxed">
-              From your local machine, connect to your server:
-            </p>
-            <CodeBlock>
-              <code>
-                <span className="text-accent">$</span> subtunnel local 3000 \{"\n"}
-                {"    "}--to your-server.example.com:7835 \{"\n"}
-                {"    "}--token YOUR_TOKEN \{"\n"}
-                {"    "}--subdomain myapp{"\n\n"}
-                <span className="text-muted"># ✓ Connected</span>{"\n"}
-                <span className="text-muted"># Forwarding: https://myapp.tunnel.example.com → localhost:3000</span>
-              </code>
-            </CodeBlock>
-
-            <div className="mt-8 rounded-xl border border-accent/20 bg-accent/5 p-6">
-              <h4 className="text-sm font-semibold mb-2">Architecture Overview</h4>
-              <pre className="text-xs text-muted font-mono leading-relaxed">
-{`Internet → nginx (TLS :443) → HTTP listener (:8080) → route by Host header
-                                                         ↕ yamux streams
-Client (subtunnel local) ←— TLS + yamux (:7835) ——→ SubTunnel Server
-        ↕                                              (control + data)
-   localhost:PORT`}
-              </pre>
-            </div>
+              <GuideStep
+                number="07"
+                title="Connect a client"
+                description="From your local machine, connect a port to the server and request its public subdomain."
+              >
+                <CodeBlock>
+                  <span className="text-accent">$</span> subtunnel local 3000 --to tunnel.example.com:7835 --token YOUR_TOKEN --subdomain myapp
+                </CodeBlock>
+              </GuideStep>
+            </ol>
           </section>
 
-          {/* CLI Reference */}
-          <section id="cli-reference" className="scroll-mt-24 mb-16">
-            <h2 className="text-2xl font-bold tracking-tight mb-4 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 border border-accent/20">
-                <Terminal className="w-4 h-4 text-accent" />
-              </div>
-              CLI Reference
-            </h2>
+          <section
+            id="cli-reference"
+            className="scroll-mt-24 border-t border-border py-24 sm:py-32"
+          >
+            <SectionHeader kicker="CLI Reference">
+              Two commands. That&apos;s the whole CLI.
+            </SectionHeader>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-muted">
+              Run the public server on your VPS, then connect local ports from
+              any machine holding the authentication token.
+            </p>
 
-            <div className="space-y-8">
+            <div className="mt-12 space-y-14">
               <div>
-                <h3 className="text-lg font-semibold mb-3">subtunnel server</h3>
-                <p className="text-muted text-sm mb-4">
-                  Run the SubTunnel server on your VPS. This is the public-facing component that accepts client connections and routes traffic.
+                <h3 className="font-mono text-lg font-semibold text-foreground">
+                  subtunnel server
+                </h3>
+                <p className="mb-6 mt-2 text-sm leading-6 text-muted">
+                  Run the public-facing server that accepts client connections
+                  and routes traffic.
                 </p>
-                <CodeBlock>
-                  <code>
-                    <span className="text-accent">$</span> subtunnel server --domain tunnel.example.com --token SECRET{"\n\n"}
-                    <span className="text-muted"># All options:</span>{"\n"}
-                    <span className="text-accent">$</span> subtunnel server \{"\n"}
-                    {"    "}--domain tunnel.example.com \{"  "}<span className="text-muted"># Required: base domain for subdomains</span>{"\n"}
-                    {"    "}--token SECRET \{"              "}<span className="text-muted"># Auth token clients must provide</span>{"\n"}
-                    {"    "}--port 7835 \{"               "}<span className="text-muted"># Control plane port (default: 7835)</span>{"\n"}
-                    {"    "}--http-port 8080 \{"           "}<span className="text-muted"># HTTP listener port (default: 8080)</span>{"\n"}
-                    {"    "}--host 0.0.0.0 \{"             "}<span className="text-muted"># Bind address (default: 0.0.0.0)</span>{"\n"}
-                    {"    "}--extra-domain other.com{"      "}<span className="text-muted"># Accept additional domains</span>
-                  </code>
-                </CodeBlock>
+                <FlagTable rows={serverFlags} />
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-3">subtunnel local</h3>
-                <p className="text-muted text-sm mb-4">
-                  Connect to a SubTunnel server and expose a local port to the internet.
+                <h3 className="font-mono text-lg font-semibold text-foreground">
+                  subtunnel local
+                </h3>
+                <p className="mb-6 mt-2 text-sm leading-6 text-muted">
+                  Connect to a SubTunnel server and expose one local port.
                 </p>
-                <CodeBlock>
-                  <code>
-                    <span className="text-accent">$</span> subtunnel local 3000 --to server:7835 --token SECRET{"\n\n"}
-                    <span className="text-muted"># With a custom subdomain:</span>{"\n"}
-                    <span className="text-accent">$</span> subtunnel local 3000 \{"\n"}
-                    {"    "}--to server.example.com:7835 \{"\n"}
-                    {"    "}--token SECRET \{"\n"}
-                    {"    "}--subdomain myapp{"             "}<span className="text-muted"># → myapp.tunnel.example.com</span>{"\n\n"}
-                    <span className="text-muted"># Skip TLS verification (self-signed certs):</span>{"\n"}
-                    <span className="text-accent">$</span> subtunnel local 3000 --to server:7835 --token SECRET --tls-verify false{"\n\n"}
-                    <span className="text-muted"># Use a custom CA certificate:</span>{"\n"}
-                    <span className="text-accent">$</span> subtunnel local 3000 --to server:7835 --token SECRET --tls-ca /path/to/ca.pem
-                  </code>
-                </CodeBlock>
+                <FlagTable rows={localFlags} />
               </div>
             </div>
           </section>
 
-          {/* Next steps */}
-          <div className="rounded-xl border border-border bg-surface/50 p-8">
-            <h3 className="text-lg font-semibold mb-2">Questions or feedback?</h3>
-            <p className="text-sm text-muted mb-4">
-              Open an issue in the SubTunnel repository.
-            </p>
-            <a
-              href="https://github.com/ozankasikci/subtunnel/issues"
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm hover:bg-surface-2 transition-colors"
-            >
-              GitHub Issues
-              <ArrowRight className="w-3 h-3" />
-            </a>
-          </div>
+          <aside className="border-t border-border pt-16" aria-labelledby="feedback-title">
+            <div className="rounded-2xl border border-border bg-surface p-7 sm:flex sm:items-center sm:justify-between sm:gap-8 sm:p-8">
+              <div>
+                <h2 id="feedback-title" className="font-semibold text-foreground">
+                  Questions or feedback?
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  Open an issue in the SubTunnel repository.
+                </p>
+              </div>
+              <a
+                href="https://github.com/ozankasikci/subtunnel/issues"
+                className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-accent sm:mt-0"
+              >
+                GitHub Issues <span className="text-accent" aria-hidden="true">↗</span>
+              </a>
+            </div>
+          </aside>
         </div>
       </div>
     </div>
