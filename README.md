@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">SubTunnel</h1>
-  <p align="center"><b>Expose localhost to the internet — on your own domain, on your own server.</b><br>A self-hosted ngrok alternative written in Rust. One binary, MIT licensed.</p>
+  <p align="center"><b>Expose localhost to the internet, on your own domain, on your own server.</b><br>A self-hosted ngrok alternative written in Rust. One binary, MIT licensed.</p>
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
 
 ---
 
-SubTunnel is a **self-hosted tunneling tool**: run the server on any VPS, connect from anywhere, and your local port is live at `https://myapp.your-domain.com`. Perfect for **testing webhooks**, **sharing dev builds**, and **reaching services behind NAT** — without routing your traffic through a third party.
+SubTunnel is a **self-hosted tunneling tool**: run the server on any VPS, connect from anywhere, and your local port is live at `https://myapp.your-domain.com`. Perfect for **testing webhooks**, **sharing dev builds**, and **reaching services behind NAT**. None of your traffic routes through a third party.
 
 ```console
 $ subtunnel local 3000 --to tunnel.example.com:7835 --token TOKEN --subdomain myapp
@@ -24,12 +24,12 @@ $ subtunnel local 3000 --to tunnel.example.com:7835 --token TOKEN --subdomain my
 
 ## Why SubTunnel?
 
-- **Your infrastructure, your data** — traffic flows through *your* VPS, not a SaaS. No request limits, no bandwidth caps, no third party in the middle.
-- **Your domain** — every tunnel gets a wildcard subdomain on a domain you own. Professional URLs for demos and webhook endpoints.
-- **One static binary** — written in Rust on Tokio with yamux multiplexing. No runtime, no dependencies, ~2 MB download.
-- **Boringly standard TLS** — nginx + Let's Encrypt terminate HTTPS with tooling you already trust. The control plane is TLS-encrypted with token auth.
-- **Auto-reconnect** — clients survive network interruptions with exponential backoff.
-- **MIT licensed** — read the code, fork it, ship it. No open-core bait, no license traps.
+- **Your infrastructure, your data.** Traffic flows through *your* VPS, not a SaaS. No request limits, no bandwidth caps, no third party in the middle.
+- **Your domain.** Every tunnel gets a wildcard subdomain on a domain you own. Professional URLs for demos and webhook endpoints.
+- **One static binary.** Written in Rust on Tokio with yamux multiplexing. No runtime, no dependencies, ~2 MB download.
+- **Boringly standard TLS.** nginx + Let's Encrypt terminate HTTPS with tooling you already trust. The control plane is TLS-encrypted with token auth.
+- **Auto-reconnect.** Clients survive network interruptions with exponential backoff.
+- **MIT licensed.** Read the code, fork it, ship it. No open-core bait, no license traps.
 
 ## How it works
 
@@ -67,11 +67,11 @@ subtunnel local 3000 \
 
 Your local port 3000 is now live at `https://myapp.tunnel.example.com`.
 
-> Don't have a server yet? Self-hosting takes about 15 minutes — see below.
+> Don't have a server yet? Self-hosting takes about 15 minutes. See below.
 
 ## Self-Host the Server
 
-Everything runs on one small VPS (EC2, Hetzner, DigitalOcean — anything with a public IP). You need a domain and ports 80, 443, and 7835 reachable.
+Everything runs on one small VPS (EC2, Hetzner, DigitalOcean, anything with a public IP). You need a domain and ports 80, 443, and 7835 reachable.
 
 ### 1. DNS
 
@@ -82,7 +82,7 @@ A     tunnel.example.com      → YOUR_SERVER_IP
 A     *.tunnel.example.com    → YOUR_SERVER_IP
 ```
 
-> **Tip:** if your apex domain points elsewhere (e.g. a website host), that's fine — clients should connect via a name that resolves to the tunnel box, like `tunnel.example.com:7835`, never the apex.
+> **Tip:** if your apex domain points elsewhere (e.g. a website host), that's fine. Just have clients connect via a name that resolves to the tunnel box, like `tunnel.example.com:7835`, never the apex.
 
 ### 2. Install & run
 
@@ -172,7 +172,7 @@ Expose a local port through a SubTunnel server.
 
 | Flag | Description |
 |---|---|
-| `<port>` | Positional — local port to expose |
+| `<port>` | Positional. Local port to expose |
 | `--to` | Server address, `host:port` |
 | `--token` | Auth token. Env: `SUBTUNNEL_TOKEN` |
 | `--subdomain` | Request a specific subdomain |
@@ -181,7 +181,7 @@ Expose a local port through a SubTunnel server.
 
 ## Comparison
 
-Honest differences — pick what fits:
+The honest differences:
 
 | | SubTunnel | ngrok | frp | Cloudflare Tunnel |
 |---|---|---|---|---|
@@ -196,14 +196,14 @@ If you want zero setup, use ngrok. If you want your traffic on your own box with
 
 ## Use cases
 
-- **Webhook development** — give Stripe/GitHub/Twilio a stable HTTPS URL that hits your laptop.
-- **Demo links** — share `https://demo.your-domain.com` with a client without deploying.
-- **Mobile app backends** — point a TestFlight build at your local API.
-- **Home lab / IoT** — reach services behind CGNAT without port forwarding.
+- **Webhook development.** Give Stripe/GitHub/Twilio a stable HTTPS URL that hits your laptop.
+- **Demo links.** Share `https://demo.your-domain.com` with a client without deploying.
+- **Mobile app backends.** Point a TestFlight build at your local API.
+- **Home lab / IoT.** Reach services behind CGNAT without port forwarding.
 
 ## Roadmap
 
-Planned, in rough order — issues and PRs welcome:
+Planned, in rough order. Issues and PRs welcome:
 
 - TCP tunnel support (databases, SSH)
 - Local request inspector / replay
@@ -212,7 +212,7 @@ Planned, in rough order — issues and PRs welcome:
 
 ## Contributing
 
-Bug reports and PRs are welcome. The codebase is a small Rust workspace (`crates/cli` — client, server, and protocol) plus the docs site (`apps/web`, Next.js). Run the tests with:
+Bug reports and PRs are welcome. The codebase is a small Rust workspace (`crates/cli`: client, server, and protocol) plus the docs site (`apps/web`, Next.js). Run the tests with:
 
 ```bash
 cargo test --workspace
@@ -220,4 +220,4 @@ cargo test --workspace
 
 ## License
 
-[MIT](LICENSE) — do whatever you want with it.
+[MIT](LICENSE). Do whatever you want with it.
