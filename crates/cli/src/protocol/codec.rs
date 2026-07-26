@@ -135,7 +135,7 @@ mod tests {
         let len = MAX_MESSAGE_SIZE + 1;
         let mut buf = BytesMut::new();
         buf.put_u32(len);
-        buf.extend_from_slice(&vec![0u8; 8]);
+        buf.extend_from_slice(&[0u8; 8]);
         assert!(decode_message(&mut buf).is_err());
     }
 
