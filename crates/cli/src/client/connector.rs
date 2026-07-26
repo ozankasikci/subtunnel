@@ -14,6 +14,14 @@ use crate::protocol::ControlMessage;
 use crate::transport::mux::{MuxSession, YamuxStreamCompatExt};
 use crate::transport::tls::{client_config_from_options, ClientTlsOptions};
 
+#[derive(Debug, thiserror::Error)]
+enum HardConnectionError {
+    #[error("authentication failed: {0}")]
+    Authentication(String),
+    #[error("tunnel request rejected: {0}")]
+    TunnelRejected(String),
+}
+
 /// TLS options for the client connection.
 #[derive(Debug, Clone)]
 pub struct ConnectTlsOptions {
@@ -239,7 +247,7 @@ pub async fn connect_with_config(
             success: false,
             message,
         } => {
-            bail!("authentication failed: {message}");
+            return Err(HardConnectionError::Authentication(message).into());
         }
         other => bail!("unexpected message during auth: {other:?}"),
     }
@@ -275,7 +283,7 @@ pub async fn connect_with_config(
             message,
             ..
         } => {
-            bail!("tunnel request rejected: {message}");
+            return Err(HardConnectionError::TunnelRejected(message).into());
         }
         other => bail!("unexpected message during tunnel setup: {other:?}"),
     };
@@ -406,6 +414,31 @@ pub async fn connect_with_retry<F, Fut>(
     requested_subdomain: Option<&str>,
     tls_opts: &ConnectTlsOptions,
     shutdown: tokio::sync::watch::Receiver<bool>,
+    on_connected: F,
+) -> Result<()>
+where
+    F: FnMut(EstablishedConnection) -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    connect_with_retry_policy(
+        server_addr,
+        token,
+        requested_subdomain,
+        tls_opts,
+        shutdown,
+        false,
+        on_connected,
+    )
+    .await
+}
+
+pub(crate) async fn connect_with_retry_policy<F, Fut>(
+    server_addr: &str,
+    token: &str,
+    requested_subdomain: Option<&str>,
+    tls_opts: &ConnectTlsOptions,
+    shutdown: tokio::sync::watch::Receiver<bool>,
+    stop_on_hard_error: bool,
     mut on_connected: F,
 ) -> Result<()>
 where
@@ -429,6 +462,9 @@ where
             }
             Err(e) => {
                 error!("connection failed: {e:#}");
+                if stop_on_hard_error && e.downcast_ref::<HardConnectionError>().is_some() {
+                    return Err(e);
+                }
             }
         }
 

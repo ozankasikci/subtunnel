@@ -1,6 +1,6 @@
 [package]
 name = "subtunnel"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "A self-hosted ngrok alternative written in Rust"
 license = "MIT"
@@ -23,6 +23,8 @@ rcgen = "0.13"
 clap = { version = "4", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
+dirs = "6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"

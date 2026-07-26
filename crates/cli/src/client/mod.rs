@@ -38,14 +38,30 @@ impl Client {
     }
 
     pub async fn run(self, shutdown: tokio::sync::watch::Receiver<bool>) -> Result<()> {
+        self.run_with_policy(shutdown, false).await
+    }
+
+    pub async fn run_until_hard_error(
+        self,
+        shutdown: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<()> {
+        self.run_with_policy(shutdown, true).await
+    }
+
+    async fn run_with_policy(
+        self,
+        shutdown: tokio::sync::watch::Receiver<bool>,
+        stop_on_hard_error: bool,
+    ) -> Result<()> {
         let local_addr = format!("localhost:{}", self.local_port);
 
-        connect_with_retry(
+        connector::connect_with_retry_policy(
             &self.server_addr,
             &self.token,
             self.subdomain.as_deref(),
             &self.tls_opts,
             shutdown.clone(),
+            stop_on_hard_error,
             |conn| {
                 let local_addr = local_addr.clone();
                 let shutdown = shutdown.clone();

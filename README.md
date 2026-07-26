@@ -17,7 +17,7 @@ SubTunnel is a **self-hosted tunneling tool**: run the server on any VPS, connec
 ```console
 $ subtunnel local 3000 --to tunnel.example.com:7835 --token TOKEN --subdomain myapp
 
-  subtunnel v0.2.1
+  subtunnel v0.3.0
   Status:     connected
   Forwarding: https://myapp.tunnel.example.com -> localhost:3000
 ```
@@ -68,6 +68,47 @@ subtunnel local 3000 \
 Your local port 3000 is now live at `https://myapp.tunnel.example.com`.
 
 > Don't have a server yet? Self-hosting takes about 15 minutes. See below.
+
+## Start on boot
+
+The client can read one or more tunnels from a TOML config file. The default path is your platform config directory plus `subtunnel/config.toml`. On Linux this honors `XDG_CONFIG_HOME`. On macOS, SubTunnel uses `~/.config/subtunnel/config.toml` when that file exists, then falls back to the platform config directory. Pass `--config <path>` to override it.
+
+```toml
+server = "tunnel.example.com:7835"
+token = "YOUR_TOKEN"
+tls_verify = true
+# tls_ca = "/path/to/ca.pem"
+
+[tunnels.myapp]
+local_port = 3000
+subdomain = "myapp"
+
+[tunnels.api]
+local_port = 8080
+```
+
+Keeping the token in this file avoids exposing it in the process list. Protect the file with permissions appropriate for your user.
+
+Start every configured tunnel in one process, or name a subset:
+
+```bash
+subtunnel run --all
+subtunnel run myapp api
+subtunnel run --all --config /absolute/path/to/config.toml
+```
+
+Install the agent as a native systemd service on Linux or a launchd service on macOS:
+
+```bash
+subtunnel service install --config /absolute/path/to/config.toml
+subtunnel service status
+```
+
+Run the install command as your normal user for a user service. On Linux, user services start at login; run `loginctl enable-linger $USER` to make the service start at boot. Run the install command with `sudo` for a system service. The system service uses the config path supplied to the sudo command, so use an absolute path that root can read. The service starts on boot and restarts the SubTunnel agent after a crash.
+
+Use `subtunnel service generate systemd --config /absolute/path/to/config.toml` or replace `systemd` with `launchd` to review and customize the definition before installing it.
+
+SubTunnel supervises only the tunnel agent. It does not start or supervise your application. If a systemd tunnel must wait for your app, customize the generated unit with `After=myapp.service`.
 
 ## Self-Host the Server
 
@@ -150,7 +191,7 @@ sudo systemctl enable --now subtunnel
 
 ## CLI Reference
 
-Two commands. That's the whole CLI.
+Four focused command areas cover the server, one-off clients, configured tunnels, and native service management.
 
 ### `subtunnel server`
 
@@ -178,6 +219,30 @@ Expose a local port through a SubTunnel server.
 | `--subdomain` | Request a specific subdomain |
 | `--tls-verify` | Verify server TLS cert. Default: `true` (set `false` for self-signed) |
 | `--tls-ca` | Custom CA certificate PEM path |
+
+### `subtunnel run`
+
+Start configured tunnels in one process. Each tunnel keeps its own connection and reconnect loop.
+
+| Flag | Description |
+|---|---|
+| `<tunnel>...` | Optional tunnel names. Omit to start all configured tunnels |
+| `--all` | Start all configured tunnels |
+| `--config` | Override the platform config file path |
+
+### `subtunnel service`
+
+Manage the client agent as a native systemd or launchd service.
+
+| Subcommand | Description |
+|---|---|
+| `install` | Validate the config, install the native service, and enable it at boot |
+| `uninstall` | Stop, disable, and remove the native service |
+| `start` / `stop` | Start or stop the installed service |
+| `status` | Show service status |
+| `generate <systemd\|launchd>` | Print a service definition without installing it |
+
+Use `--config <path>` with `install` or `generate` to override the default config path. Service management is not supported yet on Windows.
 
 ## Comparison
 
@@ -207,7 +272,6 @@ Planned, in rough order. Issues and PRs welcome:
 
 - TCP tunnel support (databases, SSH)
 - Local request inspector / replay
-- Token configuration via file (avoid tokens in process lists)
 - Windows support in the install script
 
 ## Contributing

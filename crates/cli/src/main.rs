@@ -1,10 +1,15 @@
-use anyhow::Result;
-use clap::{Parser, Subcommand};
+use std::path::{Path, PathBuf};
+
+use anyhow::{ensure, Result};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use subtunnel::client::Client;
+use subtunnel::config::{load_config, resolve_config_path, select_tunnels, TunnelConfig};
+use subtunnel::runner::run_tunnels;
 use subtunnel::server::{Server, ServerConfig};
+use subtunnel::service::{handle_service, ServiceAction, ServiceFormat};
 
 #[derive(Parser)]
 #[command(
@@ -79,6 +84,69 @@ enum Command {
         #[arg(long)]
         tls_ca: Option<String>,
     },
+
+    /// Run one or more tunnels from a config file.
+    Run {
+        /// Start every tunnel in the config file.
+        #[arg(long, conflicts_with = "tunnel_names")]
+        all: bool,
+
+        /// Tunnel names to start. Starts all tunnels when omitted.
+        #[arg(value_name = "TUNNEL")]
+        tunnel_names: Vec<String>,
+
+        /// Path to the SubTunnel config file.
+        #[arg(long, value_name = "PATH")]
+        config: Option<PathBuf>,
+    },
+
+    /// Manage the native SubTunnel agent service.
+    Service(ServiceArgs),
+}
+
+#[derive(Args)]
+struct ServiceArgs {
+    /// Path to the SubTunnel config file.
+    #[arg(long, global = true, value_name = "PATH")]
+    config: Option<PathBuf>,
+
+    #[command(subcommand)]
+    command: ServiceCommand,
+}
+
+#[derive(Subcommand)]
+enum ServiceCommand {
+    /// Install, enable, and start the native service.
+    Install,
+    /// Stop, disable, and remove the native service.
+    Uninstall,
+    /// Start the installed native service.
+    Start,
+    /// Stop the installed native service.
+    Stop,
+    /// Show the native service status.
+    Status,
+    /// Print a service definition without installing it.
+    Generate {
+        /// Service definition format.
+        #[arg(value_enum)]
+        format: ServiceFormatArg,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum ServiceFormatArg {
+    Systemd,
+    Launchd,
+}
+
+impl From<ServiceFormatArg> for ServiceFormat {
+    fn from(value: ServiceFormatArg) -> Self {
+        match value {
+            ServiceFormatArg::Systemd => Self::Systemd,
+            ServiceFormatArg::Launchd => Self::Launchd,
+        }
+    }
 }
 
 #[tokio::main]
@@ -101,7 +169,16 @@ async fn main() -> Result<()> {
     });
 
     match cli.command {
-        Command::Server { port, http_port, host, domain, extra_domains, token, tls_cert, tls_key } => {
+        Command::Server {
+            port,
+            http_port,
+            host,
+            domain,
+            extra_domains,
+            token,
+            tls_cert,
+            tls_key,
+        } => {
             eprintln!(
                 "\n  \x1b[1;32msubtunnel\x1b[0m v{}\n  \x1b[1mMode:\x1b[0m       server\n  \x1b[1mControl:\x1b[0m    {}:{}\n  \x1b[1mHTTP:\x1b[0m       {}:{}\n  \x1b[1mDomain:\x1b[0m     *.{}\n  \x1b[1mAuth:\x1b[0m       {}\n",
                 env!("CARGO_PKG_VERSION"),
@@ -147,7 +224,47 @@ async fn main() -> Result<()> {
             let client = Client::new(to, token, local_port, subdomain, tls_opts);
             client.run(shutdown_rx).await?;
         }
+        Command::Run {
+            all,
+            tunnel_names,
+            config,
+        } => {
+            let config_path = resolve_config_path(config)?;
+            let config = load_config(&config_path)?;
+            let tunnels = select_tunnels(&config, all, &tunnel_names)?;
+            ensure!(
+                !tunnels.is_empty(),
+                "config file {} defines no tunnels",
+                config_path.display()
+            );
+            print_run_banner(&config_path, &tunnels);
+            run_tunnels(&config, tunnels, shutdown_rx).await?;
+        }
+        Command::Service(args) => {
+            let action = match args.command {
+                ServiceCommand::Install => ServiceAction::Install,
+                ServiceCommand::Uninstall => ServiceAction::Uninstall,
+                ServiceCommand::Start => ServiceAction::Start,
+                ServiceCommand::Stop => ServiceAction::Stop,
+                ServiceCommand::Status => ServiceAction::Status,
+                ServiceCommand::Generate { format } => ServiceAction::Generate(format.into()),
+            };
+            handle_service(action, args.config)?;
+        }
     }
 
     Ok(())
+}
+
+fn print_run_banner(config_path: &Path, tunnels: &[(String, TunnelConfig)]) {
+    eprintln!(
+        "\n  \x1b[1;32msubtunnel\x1b[0m v{}\n  \x1b[1mMode:\x1b[0m       agent\n  \x1b[1mConfig:\x1b[0m     {}\n  \x1b[1mTunnels:\x1b[0m",
+        env!("CARGO_PKG_VERSION"),
+        config_path.display(),
+    );
+    for (name, tunnel) in tunnels {
+        let subdomain = tunnel.subdomain.as_deref().unwrap_or("automatic subdomain");
+        eprintln!("    {name}: localhost:{} ({subdomain})", tunnel.local_port);
+    }
+    eprintln!("  \x1b[1mConnecting...\x1b[0m\n");
 }

@@ -378,11 +378,11 @@ export default function DocsPage() {
             className="scroll-mt-24 border-t border-border py-24 sm:py-32"
           >
             <SectionHeader kicker="CLI Reference">
-              Two commands. That&apos;s the whole CLI.
+              Four focused command areas.
             </SectionHeader>
             <p className="mt-5 max-w-2xl text-base leading-7 text-muted">
-              Run the public server on your VPS, then connect local ports from
-              any machine holding the authentication token.
+              Run the public server, connect one local port directly, start
+              configured tunnels, or manage the client as a native service.
             </p>
 
             <div className="mt-12 space-y-14">
@@ -405,6 +405,57 @@ export default function DocsPage() {
                   Connect to a SubTunnel server and expose one local port.
                 </p>
                 <FlagTable rows={localFlags} />
+              </div>
+
+              <div>
+                <h3 className="font-mono text-lg font-semibold text-foreground">
+                  subtunnel run
+                </h3>
+                <p className="mb-6 mt-2 text-sm leading-6 text-muted">
+                  Read a TOML config and start all tunnels, or a named subset,
+                  in one process. Each tunnel has its own connection and
+                  reconnect loop. Keeping the token in the config avoids
+                  exposing it in the process list.
+                </p>
+                <CodeBlock label="config.toml">
+                  {'server = "tunnel.example.com:7835"'}{"\n"}
+                  {'token = "YOUR_TOKEN"'}{"\n\n"}
+                  {"[tunnels.myapp]"}{"\n"}
+                  {"local_port = 3000"}{"\n"}
+                  {'subdomain = "myapp"'}
+                </CodeBlock>
+                <div className="mt-4">
+                  <CodeBlock>
+                    <span className="text-accent">$</span>
+                    {" subtunnel run --all\n"}
+                    <span className="text-accent">$</span>
+                    {" subtunnel run myapp --config /absolute/path/to/config.toml"}
+                  </CodeBlock>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-mono text-lg font-semibold text-foreground">
+                  subtunnel service
+                </h3>
+                <p className="mb-6 mt-2 text-sm leading-6 text-muted">
+                  Install the configured client agent as a systemd service on
+                  Linux or a launchd service on macOS. Normal users install a
+                  user service. Running the command with sudo installs a system
+                  service. SubTunnel does not manage your application process.
+                </p>
+                <CodeBlock>
+                  <span className="text-accent">$</span>
+                  {
+                    " subtunnel service install --config /absolute/path/to/config.toml\n"
+                  }
+                  <span className="text-accent">$</span>
+                  {" subtunnel service status\n"}
+                  <span className="text-accent">$</span>
+                  {
+                    " subtunnel service generate systemd --config /absolute/path/to/config.toml"
+                  }
+                </CodeBlock>
               </div>
             </div>
           </section>
