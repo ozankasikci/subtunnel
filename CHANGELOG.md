@@ -2,7 +2,7 @@
 
 Notable changes to SubTunnel. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.1] - 2026-08-16
 
 ### Fixed
 
@@ -47,7 +47,7 @@ Notable changes to SubTunnel. The format is based on [Keep a Changelog](https://
 
 - Initial release: `subtunnel server` (control plane, HTTP routing, token auth, TLS) and `subtunnel local` (expose a local port at a subdomain), release workflow with prebuilt binaries, and an install script.
 
-[Unreleased]: https://github.com/ozankasikci/subtunnel/compare/v0.3.0...HEAD
+[0.3.1]: https://github.com/ozankasikci/subtunnel/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/ozankasikci/subtunnel/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/ozankasikci/subtunnel/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ozankasikci/subtunnel/compare/v0.1.0...v0.2.0
