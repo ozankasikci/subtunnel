@@ -81,6 +81,8 @@ pub async fn serve_http_listener(
     loop {
         match listener.accept().await {
             Ok((stream, addr)) => {
+                crate::transport::set_tcp_nodelay(&stream);
+
                 let domains = all_domains.clone();
                 let tunnel_mgr = tunnel_mgr.clone();
                 tokio::spawn(async move {

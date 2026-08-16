@@ -67,6 +67,7 @@ async fn proxy_stream(remote: yamux::Stream, local_addr: &str) -> Result<()> {
             return Err(e).context("local connect failed");
         }
     };
+    crate::transport::set_tcp_nodelay(&local);
 
     // Bridge yamux stream (futures::io) to tokio via compat adapter
     let mut remote = remote.compat();

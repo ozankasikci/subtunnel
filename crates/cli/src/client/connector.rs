@@ -193,6 +193,7 @@ pub async fn connect_with_config(
         .await
         .with_context(|| format!("failed to connect to {server_addr}"))?;
     crate::transport::set_tcp_keepalive(&tcp)?;
+    crate::transport::set_tcp_nodelay(&tcp);
     debug!("TCP connected to {server_addr}");
 
     // Determine hostname for SNI from the server address

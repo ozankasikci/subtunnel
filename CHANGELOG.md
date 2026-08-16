@@ -2,6 +2,12 @@
 
 Notable changes to SubTunnel. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Latency: `TCP_NODELAY` is now set on every tunnel TCP connection (agent to server, server control and HTTP accepts, and agent to local service). Nagle's algorithm was buffering the small writes typical of interactive traffic, adding up to a few hundred milliseconds per round trip.
+
 ## [0.3.0] - 2026-07-26
 
 ### Added
@@ -41,6 +47,7 @@ Notable changes to SubTunnel. The format is based on [Keep a Changelog](https://
 
 - Initial release: `subtunnel server` (control plane, HTTP routing, token auth, TLS) and `subtunnel local` (expose a local port at a subdomain), release workflow with prebuilt binaries, and an install script.
 
+[Unreleased]: https://github.com/ozankasikci/subtunnel/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/ozankasikci/subtunnel/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/ozankasikci/subtunnel/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ozankasikci/subtunnel/compare/v0.1.0...v0.2.0

@@ -141,6 +141,7 @@ impl Server {
                         warn!(peer = %addr, error = %e, "failed to set TCP keepalive");
                         continue;
                     }
+                    crate::transport::set_tcp_nodelay(&stream);
 
                     let tunnel_mgr = self.tunnel_mgr.clone();
                     let auth = self.auth.clone();
